@@ -2,12 +2,40 @@
 
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  color: #10201a;
-  background: #f7faf8;
+
+  --brand-sky: #00ccff;
+  --brand-blue: #336699;
+  --brand-blue-dark: #234b73;
+  --brand-blue-hover: #2b5a88;
+
+  --brand-sky-soft: #e6faff;
+  --brand-sky-border: #b8f0ff;
+  --brand-border-soft: #d6eef8;
+
+  --app-bg: #f5fbff;
+  --app-text: #0f172a;
+  --app-muted: #475569;
+
+  color: var(--app-text);
+  background: var(--app-bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background: var(--app-bg);
+}
+
+button,
+a {
+  font: inherit;
 }
