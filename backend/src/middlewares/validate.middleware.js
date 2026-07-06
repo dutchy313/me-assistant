@@ -1,60 +1,19 @@
-import mongoose from "mongoose";
+export function validate(schema) {
+  return function validationMiddleware(req, res, next) {
+    const result = schema.safeParse(req.body);
 
-const userSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: [true, "Name is required"],
-      trim: true,
-      minlength: [2, "Name must be at least 2 characters long"]
-    },
+    if (!result.success) {
+      const message = result.error.issues
+        .map((issue) => issue.message)
+        .join(", ");
 
-    email: {
-      type: String,
-      required: [true, "Email is required"],
-      unique: true,
-      lowercase: true,
-      trim: true
-    },
-
-    passwordHash: {
-      type: String,
-      required: [true, "Password hash is required"]
-    },
-
-    role: {
-      type: String,
-      enum: ["user", "admin"],
-      default: "user"
-    },
-
-    isActive: {
-      type: Boolean,
-      default: true
-    },
-
-    loginOtpHash: {
-      type: String,
-      default: null
-    },
-
-    loginOtpExpiresAt: {
-      type: Date,
-      default: null
-    },
-
-    lastLoginAt: {
-      type: Date,
-      default: null
+      return res.status(400).json({
+        status: "fail",
+        message
+      });
     }
-  },
-  {
-    timestamps: true
-  }
-);
 
-userSchema.index({ email: 1 }, { unique: true });
-
-const User = mongoose.model("User", userSchema);
-
-export default User;
+    req.body = result.data;
+    next();
+  };
+}
