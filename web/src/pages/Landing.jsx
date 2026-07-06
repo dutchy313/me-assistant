@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   BarChart3,
   BookOpenCheck,
@@ -77,13 +78,19 @@ export default function Landing() {
           </p>
 
           <div className="mt-8 flex flex-wrap gap-4">
-            <button className="rounded-2xl bg-[var(--brand-blue)] px-6 py-3 font-semibold text-white shadow-lg shadow-[var(--brand-blue)]/20 transition hover:bg-[var(--brand-blue-hover)]">
+            <Link
+              to="/register"
+              className="rounded-2xl bg-[var(--brand-blue)] px-6 py-3 font-semibold text-white shadow-lg shadow-[var(--brand-blue)]/20 transition hover:bg-[var(--brand-blue-hover)]"
+            >
               Start asking
-            </button>
+            </Link>
 
-            <button className="rounded-2xl border border-[var(--brand-sky-border)] bg-white px-6 py-3 font-semibold text-[var(--brand-blue)] shadow-sm transition hover:bg-[var(--brand-sky-soft)] hover:text-[var(--brand-blue-dark)]">
-              Give feedback
-            </button>
+            <Link
+              to="/login"
+              className="rounded-2xl border border-[var(--brand-sky-border)] bg-white px-6 py-3 font-semibold text-[var(--brand-blue)] shadow-sm transition hover:bg-[var(--brand-sky-soft)] hover:text-[var(--brand-blue-dark)]"
+            >
+              Sign in
+            </Link>
           </div>
         </section>
 
