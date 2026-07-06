@@ -62,7 +62,14 @@ function createSixDigitOtp() {
   return crypto.randomInt(100000, 999999).toString();
 }
 
-export async function registerUser({ name, email, password }) {
+export async function registerUser({ name, email, password, companyWebsite }) {
+  // Honeypot anti-bot check.
+  // The frontend will include this as a hidden field.
+  // Real users will leave it empty.
+  if (companyWebsite) {
+    throw new AppError("Signup could not be completed", 400);
+  }
+
   const existingUser = await User.findOne({ email });
 
   if (existingUser) {
