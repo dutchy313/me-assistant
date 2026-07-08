@@ -1,17 +1,23 @@
 import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
+
 import Landing from "./pages/Landing";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import VerifyOtp from "./pages/auth/VerifyOtp";
+
 import Dashboard from "./pages/dashboard/Dashboard";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
-import { fetchMeThunk } from "./store/authSlice";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
+
 import ChatWorkspace from "./pages/app/ChatWorkspace";
 import FeedbackCenter from "./pages/app/FeedbackCenter";
 import AdminHome from "./pages/app/AdminHome";
+import AdminFeedbackSummary from "./pages/app/AdminFeedbackSummary";
+import AdminDocuments from "./pages/app/AdminDocuments";
+
+import { fetchMeThunk } from "./store/authSlice";
 
 export default function App() {
   const dispatch = useDispatch();
@@ -51,7 +57,9 @@ export default function App() {
           }
         >
           <Route index element={<Dashboard />} />
+
           <Route path="chat" element={<ChatWorkspace />} />
+
           <Route path="feedback" element={<FeedbackCenter />} />
 
           <Route
@@ -62,9 +70,24 @@ export default function App() {
           />
 
           <Route
+            path="admin/feedback"
+            element={
+              isAdmin ? (
+                <AdminFeedbackSummary />
+              ) : (
+                <Navigate to="/dashboard" replace />
+              )
+            }
+          />
+
+          <Route
             path="admin/documents"
             element={
-              isAdmin ? <AdminHome /> : <Navigate to="/dashboard" replace />
+              isAdmin ? (
+                <AdminDocuments />
+              ) : (
+                <Navigate to="/dashboard" replace />
+              )
             }
           />
 
