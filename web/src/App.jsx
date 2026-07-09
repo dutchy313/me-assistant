@@ -16,6 +16,7 @@ import FeedbackCenter from "./pages/app/FeedbackCenter";
 import AdminHome from "./pages/app/AdminHome";
 import AdminFeedbackSummary from "./pages/app/AdminFeedbackSummary";
 import AdminDocuments from "./pages/app/AdminDocuments";
+import AdminVectors from "./pages/app/AdminVectors";
 
 import { fetchMeThunk } from "./store/authSlice";
 
@@ -83,6 +84,15 @@ export default function App() {
             element={
               <AdminOnly token={token} user={user}>
                 <AdminDocuments />
+              </AdminOnly>
+            }
+          />
+
+          <Route
+            path="admin/vectors"
+            element={
+              <AdminOnly token={token} user={user}>
+                <AdminVectors />
               </AdminOnly>
             }
           />

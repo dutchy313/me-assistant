@@ -14,7 +14,13 @@ const ingestionLogSchema = new mongoose.Schema(
         "process_documents",
         "document_processing_started",
         "document_indexed",
-        "document_processing_failed"
+        "document_processing_failed",
+
+        "qdrant_collection_ready",
+        "embed_chunks",
+        "chunk_embedded",
+        "chunk_embedding_failed",
+        "semantic_search"
       ],
       required: true,
       index: true
@@ -36,6 +42,12 @@ const ingestionLogSchema = new mongoose.Schema(
     documentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Document",
+      default: null
+    },
+
+    chunkId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SourceChunk",
       default: null
     },
 

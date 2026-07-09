@@ -7,6 +7,7 @@ import authRoutes from "./routes/auth.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import feedbackRoutes from "./routes/feedback.routes.js";
 import documentRoutes from "./routes/document.routes.js";
+import vectorRoutes from "./routes/vector.routes.js";
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/feedback", feedbackRoutes);
 app.use("/api/v1/admin/documents", documentRoutes);
+app.use("/api/v1/admin/vectors", vectorRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

@@ -12,7 +12,8 @@ const sourceChunkSchema = new mongoose.Schema(
     vectorId: {
       type: String,
       trim: true,
-      default: ""
+      default: "",
+      index: true
     },
 
     chunkIndex: {
@@ -52,6 +53,35 @@ const sourceChunkSchema = new mongoose.Schema(
       default: 0
     },
 
+    embeddingStatus: {
+      type: String,
+      enum: ["pending", "embedded", "failed"],
+      default: "pending",
+      index: true
+    },
+
+    embeddingModel: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    embeddingDimensions: {
+      type: Number,
+      default: 0
+    },
+
+    embeddingError: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    embeddedAt: {
+      type: Date,
+      default: null
+    },
+
     isActive: {
       type: Boolean,
       default: true
@@ -63,6 +93,7 @@ const sourceChunkSchema = new mongoose.Schema(
 );
 
 sourceChunkSchema.index({ documentId: 1, chunkIndex: 1 }, { unique: true });
+sourceChunkSchema.index({ embeddingStatus: 1, isActive: 1 });
 
 const SourceChunk = mongoose.model("SourceChunk", sourceChunkSchema);
 
