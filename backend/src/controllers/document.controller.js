@@ -4,6 +4,7 @@ import {
   getDocumentById,
   getDocuments,
   getIngestionLogs,
+  processPendingDocuments,
   syncDriveFolder
 } from "../services/document.service.js";
 
@@ -15,6 +16,23 @@ export const syncDriveDocuments = asyncHandler(async (req, res) => {
   res.status(200).json({
     status: "success",
     message: "Google Drive folder sync completed",
+    data: {
+      result
+    }
+  });
+});
+
+export const processDocuments = asyncHandler(async (req, res) => {
+  const limit = Number(req.body.limit || 3);
+
+  const result = await processPendingDocuments({
+    userId: req.user._id,
+    limit
+  });
+
+  res.status(200).json({
+    status: "success",
+    message: "Document processing completed",
     data: {
       result
     }

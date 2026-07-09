@@ -10,6 +10,14 @@ export async function syncGoogleDriveDocuments() {
   return response.data;
 }
 
+export async function processPendingDocuments(limit = 3) {
+  const response = await api.post("/admin/documents/process", {
+    limit
+  });
+
+  return response.data;
+}
+
 export async function getIngestionLogs() {
   const response = await api.get("/admin/documents/logs");
   return response.data;

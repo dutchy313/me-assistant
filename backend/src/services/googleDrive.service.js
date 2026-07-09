@@ -43,7 +43,9 @@ export async function listFilesInDriveFolder(folderId) {
       fields:
         "nextPageToken, files(id, name, mimeType, modifiedTime, size, webViewLink)",
       pageSize: 100,
-      pageToken
+      pageToken,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true
     });
 
     files.push(...(response.data.files || []));
@@ -51,4 +53,25 @@ export async function listFilesInDriveFolder(folderId) {
   } while (pageToken);
 
   return files;
+}
+
+export async function downloadDriveFileAsBuffer(fileId) {
+  if (!fileId) {
+    throw new Error("Google Drive file ID is required");
+  }
+
+  const drive = createDriveClient();
+
+  const response = await drive.files.get(
+    {
+      fileId,
+      alt: "media",
+      supportsAllDrives: true
+    },
+    {
+      responseType: "arraybuffer"
+    }
+  );
+
+  return Buffer.from(response.data);
 }

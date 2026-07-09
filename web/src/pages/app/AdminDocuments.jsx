@@ -4,21 +4,32 @@ import {
   RefreshCw,
   FileText,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  PlayCircle
 } from "lucide-react";
 import {
   disableDocument,
   getAdminDocuments,
   getIngestionLogs,
+  processPendingDocuments,
   syncGoogleDriveDocuments
 } from "../../api/documentApi";
 
 export default function AdminDocuments() {
   const [documents, setDocuments] = useState([]);
   const [pagination, setPagination] = useState(null);
+  const [counts, setCounts] = useState({
+    total: 0,
+    pending: 0,
+    processing: 0,
+    indexed: 0,
+    failed: 0,
+    disabled: 0
+  });
   const [logs, setLogs] = useState([]);
   const [status, setStatus] = useState("loading");
   const [syncStatus, setSyncStatus] = useState("idle");
+  const [processStatus, setProcessStatus] = useState("idle");
   const [message, setMessage] = useState("");
 
   async function loadData() {
@@ -32,6 +43,16 @@ export default function AdminDocuments() {
 
       setDocuments(documentsResponse.data.documents);
       setPagination(documentsResponse.data.pagination);
+      setCounts(
+        documentsResponse.data.counts || {
+          total: 0,
+          pending: 0,
+          processing: 0,
+          indexed: 0,
+          failed: 0,
+          disabled: 0
+        }
+      );
       setLogs(logsResponse.data.logs);
       setStatus("succeeded");
     } catch (error) {
@@ -60,6 +81,25 @@ export default function AdminDocuments() {
     } catch (error) {
       setSyncStatus("failed");
       setMessage(error.response?.data?.message || "Google Drive sync failed");
+    }
+  }
+
+  async function handleProcess() {
+    try {
+      setProcessStatus("loading");
+      setMessage("");
+
+      const response = await processPendingDocuments(3);
+
+      setMessage(
+        `Processing completed. Indexed ${response.data.result.indexed}, failed ${response.data.result.failed}, selected ${response.data.result.totalSelected}.`
+      );
+
+      setProcessStatus("succeeded");
+      await loadData();
+    } catch (error) {
+      setProcessStatus("failed");
+      setMessage(error.response?.data?.message || "Document processing failed");
     }
   }
 
@@ -92,23 +132,39 @@ export default function AdminDocuments() {
             </h1>
 
             <p className="mt-3 max-w-3xl leading-7 text-[var(--app-muted)]">
-              Sync metadata from the Google Drive folder that contains the 82
-              M&E books. Text extraction and embeddings will come in later
-              phases.
+              Sync PDFs from Google Drive, extract text, and create searchable
+              chunks. Embeddings will come in the next phase.
             </p>
           </div>
 
-          <button
-            onClick={handleSync}
-            disabled={syncStatus === "loading"}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-blue)] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--brand-blue)]/20 transition hover:bg-[var(--brand-blue-hover)] disabled:opacity-70 dark:text-[#052033]"
-          >
-            <RefreshCw
-              size={16}
-              className={syncStatus === "loading" ? "animate-spin" : ""}
-            />
-            {syncStatus === "loading" ? "Syncing..." : "Sync Google Drive"}
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              onClick={handleSync}
+              disabled={syncStatus === "loading" || processStatus === "loading"}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-blue)] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--brand-blue)]/20 transition hover:bg-[var(--brand-blue-hover)] disabled:opacity-70 dark:text-[#052033]"
+            >
+              <RefreshCw
+                size={16}
+                className={syncStatus === "loading" ? "animate-spin" : ""}
+              />
+              {syncStatus === "loading" ? "Syncing..." : "Sync Drive"}
+            </button>
+
+            <button
+              onClick={handleProcess}
+              disabled={
+                processStatus === "loading" ||
+                syncStatus === "loading" ||
+                counts.pending === 0
+              }
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-5 py-3 text-sm font-semibold text-[var(--app-text)] transition hover:bg-[var(--brand-sky-soft)] hover:text-[var(--brand-blue)] disabled:opacity-50"
+            >
+              <PlayCircle size={16} />
+              {processStatus === "loading"
+                ? "Processing..."
+                : "Process 3 pending"}
+            </button>
+          </div>
         </div>
 
         {message && (
@@ -118,26 +174,31 @@ export default function AdminDocuments() {
         )}
       </section>
 
-      <section className="grid gap-5 md:grid-cols-4">
+      <section className="grid gap-5 md:grid-cols-5">
         <MetricCard
           icon={<BookOpenCheck />}
           label="Documents"
-          value={pagination?.total || documents.length}
+          value={counts.total}
         />
         <MetricCard
           icon={<CheckCircle2 />}
           label="Pending"
-          value={documents.filter((doc) => doc.status === "pending").length}
+          value={counts.pending}
+        />
+        <MetricCard
+          icon={<RefreshCw />}
+          label="Processing"
+          value={counts.processing}
         />
         <MetricCard
           icon={<FileText />}
           label="Indexed"
-          value={documents.filter((doc) => doc.status === "indexed").length}
+          value={counts.indexed}
         />
         <MetricCard
           icon={<AlertTriangle />}
           label="Failed"
-          value={documents.filter((doc) => doc.status === "failed").length}
+          value={counts.failed}
         />
       </section>
 
@@ -152,16 +213,18 @@ export default function AdminDocuments() {
           </p>
         ) : documents.length === 0 ? (
           <p className="mt-5 text-sm text-[var(--app-muted)]">
-            No documents synced yet. Click “Sync Google Drive”.
+            No documents synced yet. Click “Sync Drive”.
           </p>
         ) : (
           <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-sm">
+            <table className="w-full min-w-[1000px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--app-border)] text-[var(--app-muted)]">
                   <th className="py-3 pr-4">Title</th>
                   <th className="py-3 pr-4">Type</th>
                   <th className="py-3 pr-4">Status</th>
+                  <th className="py-3 pr-4">Chunks</th>
+                  <th className="py-3 pr-4">Tokens</th>
                   <th className="py-3 pr-4">Size</th>
                   <th className="py-3 pr-4">Last synced</th>
                   <th className="py-3 pr-4">Action</th>
@@ -178,9 +241,16 @@ export default function AdminDocuments() {
                       <p className="font-semibold text-[var(--app-text)]">
                         {document.title}
                       </p>
+
                       <p className="mt-1 text-xs text-[var(--app-muted)]">
                         {document.fileName}
                       </p>
+
+                      {document.errorMessage && (
+                        <p className="mt-2 text-xs text-red-600">
+                          {document.errorMessage}
+                        </p>
+                      )}
                     </td>
 
                     <td className="py-4 pr-4 text-[var(--app-muted)]">
@@ -191,6 +261,14 @@ export default function AdminDocuments() {
                       <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--app-text)]">
                         {document.status}
                       </span>
+                    </td>
+
+                    <td className="py-4 pr-4 text-[var(--app-muted)]">
+                      {document.totalChunks || 0}
+                    </td>
+
+                    <td className="py-4 pr-4 text-[var(--app-muted)]">
+                      {document.totalTokens || 0}
                     </td>
 
                     <td className="py-4 pr-4 text-[var(--app-muted)]">
@@ -222,6 +300,13 @@ export default function AdminDocuments() {
               </tbody>
             </table>
           </div>
+        )}
+
+        {pagination && (
+          <p className="mt-4 text-sm text-[var(--app-muted)]">
+            Showing page {pagination.page} of {pagination.totalPages}. Total
+            records: {pagination.total}.
+          </p>
         )}
       </section>
 

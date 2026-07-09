@@ -9,7 +9,12 @@ const ingestionLogSchema = new mongoose.Schema(
         "document_created",
         "document_updated",
         "document_skipped",
-        "document_failed"
+        "document_failed",
+
+        "process_documents",
+        "document_processing_started",
+        "document_indexed",
+        "document_processing_failed"
       ],
       required: true,
       index: true

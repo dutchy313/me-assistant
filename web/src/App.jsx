@@ -24,12 +24,10 @@ export default function App() {
   const { token, user } = useSelector((state) => state.auth);
 
   useEffect(() => {
-    if (token) {
+    if (token && !user) {
       dispatch(fetchMeThunk());
     }
-  }, [dispatch, token]);
-
-  const isAdmin = user?.role === "admin";
+  }, [dispatch, token, user]);
 
   return (
     <BrowserRouter>
@@ -65,43 +63,45 @@ export default function App() {
           <Route
             path="admin"
             element={
-              isAdmin ? <AdminHome /> : <Navigate to="/dashboard" replace />
+              <AdminOnly token={token} user={user}>
+                <AdminHome />
+              </AdminOnly>
             }
           />
 
           <Route
             path="admin/feedback"
             element={
-              isAdmin ? (
+              <AdminOnly token={token} user={user}>
                 <AdminFeedbackSummary />
-              ) : (
-                <Navigate to="/dashboard" replace />
-              )
+              </AdminOnly>
             }
           />
 
           <Route
             path="admin/documents"
             element={
-              isAdmin ? (
+              <AdminOnly token={token} user={user}>
                 <AdminDocuments />
-              ) : (
-                <Navigate to="/dashboard" replace />
-              )
+              </AdminOnly>
             }
           />
 
           <Route
             path="admin/usage"
             element={
-              isAdmin ? <AdminHome /> : <Navigate to="/dashboard" replace />
+              <AdminOnly token={token} user={user}>
+                <AdminHome />
+              </AdminOnly>
             }
           />
 
           <Route
             path="admin/settings"
             element={
-              isAdmin ? <AdminHome /> : <Navigate to="/dashboard" replace />
+              <AdminOnly token={token} user={user}>
+                <AdminHome />
+              </AdminOnly>
             }
           />
         </Route>
@@ -110,4 +110,20 @@ export default function App() {
       </Routes>
     </BrowserRouter>
   );
+}
+
+function AdminOnly({ token, user, children }) {
+  if (token && !user) {
+    return (
+      <div className="rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-8">
+        <p className="text-[var(--app-muted)]">Checking admin access...</p>
+      </div>
+    );
+  }
+
+  if (user?.role !== "admin") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
 }
