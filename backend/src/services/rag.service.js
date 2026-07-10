@@ -19,7 +19,9 @@ function getChatModel() {
 function getRagConfig() {
   return {
     topK: Number(process.env.RAG_TOP_K || 5),
-    minScore: Number(process.env.RAG_MIN_SCORE || 0.2)
+    candidateK: Number(process.env.RAG_CANDIDATE_K || 20),
+    minScore: Number(process.env.RAG_MIN_SCORE || 0.2),
+    maxChunksPerDocument: Number(process.env.RAG_MAX_CHUNKS_PER_DOCUMENT || 2)
   };
 }
 
@@ -32,23 +34,25 @@ export async function answerQuestionWithRag({
     conversationMessages
   });
 
-  const { topK, minScore } = getRagConfig();
+  const { topK, candidateK, minScore, maxChunksPerDocument } = getRagConfig();
 
   const queryEmbedding = await createEmbedding(standaloneQuestion);
 
   const qdrantResult = await searchChunkVectors({
     vector: queryEmbedding.embedding,
-    limit: topK
+    limit: candidateK
   });
 
   const rawPoints = qdrantResult.result?.points || qdrantResult.result || [];
 
-  const relevantPoints = rawPoints.filter((point) => {
-    const score = Number(point.score || 0);
-    return score >= minScore;
+  const selectedPoints = selectDiverseRelevantPoints({
+    points: rawPoints,
+    minScore,
+    topK,
+    maxChunksPerDocument
   });
 
-  const citations = relevantPoints.map((point, index) => {
+  const citations = selectedPoints.map((point, index) => {
     const payload = point.payload || {};
 
     return {
@@ -79,7 +83,7 @@ export async function answerQuestionWithRag({
     };
   }
 
-  const sourceBlock = relevantPoints
+  const sourceBlock = selectedPoints
     .map((point, index) => {
       const payload = point.payload || {};
 
@@ -192,6 +196,39 @@ export async function rewriteQuestionWithConversation({
   }
 
   return rewritten.slice(0, 1000);
+}
+
+function selectDiverseRelevantPoints({
+  points,
+  minScore,
+  topK,
+  maxChunksPerDocument
+}) {
+  const sortedPoints = [...points]
+    .filter((point) => Number(point.score || 0) >= minScore)
+    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+
+  const selected = [];
+  const documentCounts = new Map();
+
+  for (const point of sortedPoints) {
+    const payload = point.payload || {};
+    const documentKey = payload.documentId || payload.fileName || "unknown";
+    const currentCount = documentCounts.get(documentKey) || 0;
+
+    if (currentCount >= maxChunksPerDocument) {
+      continue;
+    }
+
+    selected.push(point);
+    documentCounts.set(documentKey, currentCount + 1);
+
+    if (selected.length >= topK) {
+      break;
+    }
+  }
+
+  return selected;
 }
 
 function buildConversationBlock(messages = []) {

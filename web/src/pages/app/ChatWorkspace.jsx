@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { BookOpenCheck, Loader2, MessageSquareText, Send } from "lucide-react";
-import { askChatQuestion, getChatMessages, getChatSessions } from "../../api/chatApi";
+import {
+  askChatQuestion,
+  getChatMessages,
+  getChatSessions
+} from "../../api/chatApi";
 import AnswerFeedback from "../../components/feedback/AnswerFeedback";
+import SourceFeedback from "../../components/feedback/SourceFeedback";
 
 export default function ChatWorkspace() {
   const [sessions, setSessions] = useState([]);
@@ -109,6 +114,16 @@ export default function ChatWorkspace() {
     setError("");
   }
 
+  function getPreviousUserQuestion(index) {
+    for (let i = index - 1; i >= 0; i -= 1) {
+      if (messages[i]?.role === "user") {
+        return messages[i].content;
+      }
+    }
+
+    return "";
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[320px_1fr]">
       <aside className="rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-5">
@@ -177,8 +192,12 @@ export default function ChatWorkspace() {
           {messages.length === 0 ? (
             <EmptyState />
           ) : (
-            messages.map((message) => (
-              <ChatBubble key={message._id} message={message} />
+            messages.map((message, index) => (
+              <ChatBubble
+                key={message._id}
+                message={message}
+                previousUserQuestion={getPreviousUserQuestion(index)}
+              />
             ))
           )}
 
@@ -245,7 +264,7 @@ function EmptyState() {
   );
 }
 
-function ChatBubble({ message }) {
+function ChatBubble({ message, previousUserQuestion }) {
   const isUser = message.role === "user";
 
   return (
@@ -266,13 +285,17 @@ function ChatBubble({ message }) {
       </div>
 
       {!isUser && message.citations?.length > 0 && (
-        <Sources citations={message.citations} />
+        <Sources
+          citations={message.citations}
+          messageId={message._id}
+          sessionId={message.sessionId}
+        />
       )}
 
       {!isUser && (
         <div className="mt-4">
           <AnswerFeedback
-            questionText=""
+            questionText={previousUserQuestion}
             answerText={message.content}
             messageId={message._id}
             sessionId={message.sessionId}
@@ -283,7 +306,7 @@ function ChatBubble({ message }) {
   );
 }
 
-function Sources({ citations }) {
+function Sources({ citations, messageId, sessionId }) {
   return (
     <div className="mt-5 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
       <div className="mb-3 flex items-center gap-2">
@@ -309,6 +332,12 @@ function Sources({ citations }) {
             <p className="mt-2 line-clamp-3 text-xs leading-5 text-[var(--app-muted)]">
               {citation.excerpt}
             </p>
+
+            <SourceFeedback
+              citation={citation}
+              messageId={messageId}
+              sessionId={sessionId}
+            />
           </div>
         ))}
       </div>
