@@ -5,6 +5,7 @@ import {
   listDocuments,
   listIngestionLogs,
   processDocuments,
+  resetFailedDocumentProcessing,
   syncDriveDocuments
 } from "../controllers/document.controller.js";
 import { requireAdmin, requireAuth } from "../middlewares/auth.middleware.js";
@@ -16,6 +17,7 @@ router.use(requireAdmin);
 
 router.post("/sync-drive", syncDriveDocuments);
 router.post("/process", processDocuments);
+router.post("/reset-failed", resetFailedDocumentProcessing);
 
 router.get("/", listDocuments);
 router.get("/logs", listIngestionLogs);

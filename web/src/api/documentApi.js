@@ -18,6 +18,11 @@ export async function processPendingDocuments(limit = 3) {
   return response.data;
 }
 
+export async function resetFailedDocuments() {
+  const response = await api.post("/admin/documents/reset-failed");
+  return response.data;
+}
+
 export async function getIngestionLogs() {
   const response = await api.get("/admin/documents/logs");
   return response.data;

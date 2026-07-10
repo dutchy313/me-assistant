@@ -2,6 +2,7 @@ import express from "express";
 import {
   embedChunks,
   prepareCollection,
+  resetFailedEmbeddings,
   searchVectors,
   vectorStats
 } from "../controllers/vector.controller.js";
@@ -14,6 +15,8 @@ router.use(requireAdmin);
 
 router.post("/prepare-collection", prepareCollection);
 router.post("/embed-chunks", embedChunks);
+router.post("/reset-failed", resetFailedEmbeddings);
+
 router.get("/stats", vectorStats);
 router.post("/search", searchVectors);
 

@@ -13,6 +13,11 @@ export async function embedPendingChunks(limit = 25) {
   return response.data;
 }
 
+export async function resetFailedEmbeddings() {
+  const response = await api.post("/admin/vectors/reset-failed");
+  return response.data;
+}
+
 export async function getVectorStats() {
   const response = await api.get("/admin/vectors/stats");
   return response.data;

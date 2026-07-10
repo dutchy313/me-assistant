@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
-import { BrainCircuit, Database, PlayCircle, Search } from "lucide-react";
+import {
+  BrainCircuit,
+  Database,
+  PlayCircle,
+  RotateCcw,
+  Search
+} from "lucide-react";
 import {
   embedPendingChunks,
   getVectorStats,
   prepareVectorCollection,
+  resetFailedEmbeddings,
   semanticVectorSearch
 } from "../../api/vectorApi";
 
@@ -17,9 +24,11 @@ export default function AdminVectors() {
     documentsWithEmbeddings: 0
   });
 
+  const [batchSize, setBatchSize] = useState(25);
   const [status, setStatus] = useState("loading");
   const [prepareStatus, setPrepareStatus] = useState("idle");
   const [embedStatus, setEmbedStatus] = useState("idle");
+  const [resetStatus, setResetStatus] = useState("idle");
   const [searchStatus, setSearchStatus] = useState("idle");
   const [message, setMessage] = useState("");
 
@@ -67,7 +76,8 @@ export default function AdminVectors() {
       setEmbedStatus("loading");
       setMessage("");
 
-      const response = await embedPendingChunks(25);
+      const safeBatchSize = Math.max(1, Math.min(Number(batchSize) || 1, 100));
+      const response = await embedPendingChunks(safeBatchSize);
 
       setMessage(
         `Embedding completed. Embedded ${response.data.result.embedded}, failed ${response.data.result.failed}, selected ${response.data.result.totalSelected}.`
@@ -78,6 +88,31 @@ export default function AdminVectors() {
     } catch (error) {
       setEmbedStatus("failed");
       setMessage(error.response?.data?.message || "Could not embed chunks");
+    }
+  }
+
+  async function handleResetFailed() {
+    const confirmed = window.confirm(
+      "Reset failed chunk embeddings back to pending so they can be embedded again?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setResetStatus("loading");
+      setMessage("");
+
+      const response = await resetFailedEmbeddings();
+
+      setMessage(
+        `Reset ${response.data.result.resetCount} failed chunk embedding(s) back to pending.`
+      );
+
+      setResetStatus("succeeded");
+      await loadStats();
+    } catch (error) {
+      setResetStatus("failed");
+      setMessage(error.response?.data?.message || "Could not reset embeddings");
     }
   }
 
@@ -101,11 +136,21 @@ export default function AdminVectors() {
     }
   }
 
+  const busy =
+    prepareStatus === "loading" ||
+    embedStatus === "loading" ||
+    resetStatus === "loading";
+
+  const embeddedPercent =
+    stats.totalChunks === 0
+      ? 0
+      : Math.round((stats.embeddedChunks / stats.totalChunks) * 100);
+
   return (
     <div className="space-y-6">
       <section className="rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-8 shadow-xl shadow-[var(--brand-blue)]/10">
         <div className="mb-5 inline-flex rounded-full border border-[var(--brand-sky-border)] bg-[var(--brand-sky-soft)] px-4 py-2 text-sm font-semibold text-[var(--brand-blue)]">
-          Qdrant + OpenAI embeddings
+          Safe vector embedding
         </div>
 
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
@@ -116,34 +161,58 @@ export default function AdminVectors() {
 
             <p className="mt-3 max-w-3xl leading-7 text-[var(--app-muted)]">
               Convert extracted chunks into OpenAI embeddings and store them in
-              Qdrant for semantic search.
+              Qdrant in controlled batches.
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              onClick={handlePrepareCollection}
-              disabled={prepareStatus === "loading" || embedStatus === "loading"}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-5 py-3 text-sm font-semibold text-[var(--app-text)] transition hover:bg-[var(--brand-sky-soft)] hover:text-[var(--brand-blue)] disabled:opacity-50"
-            >
-              <Database size={16} />
-              {prepareStatus === "loading" ? "Preparing..." : "Prepare Qdrant"}
-            </button>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={handlePrepareCollection}
+                disabled={busy}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-5 py-3 text-sm font-semibold text-[var(--app-text)] transition hover:bg-[var(--brand-sky-soft)] hover:text-[var(--brand-blue)] disabled:opacity-50"
+              >
+                <Database size={16} />
+                {prepareStatus === "loading" ? "Preparing..." : "Prepare Qdrant"}
+              </button>
 
-            <button
-              onClick={handleEmbedChunks}
-              disabled={
-                embedStatus === "loading" ||
-                prepareStatus === "loading" ||
-                stats.pendingChunks === 0
-              }
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-blue)] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--brand-blue)]/20 transition hover:bg-[var(--brand-blue-hover)] disabled:opacity-70 dark:text-[#052033]"
-            >
-              <PlayCircle size={16} />
-              {embedStatus === "loading"
-                ? "Embedding..."
-                : "Embed 25 chunks"}
-            </button>
+              <button
+                onClick={handleResetFailed}
+                disabled={busy || stats.failedChunks === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-5 py-3 text-sm font-semibold text-[var(--app-text)] transition hover:bg-[var(--brand-sky-soft)] hover:text-[var(--brand-blue)] disabled:opacity-50"
+              >
+                <RotateCcw size={16} />
+                Reset failed
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-3 sm:flex-row sm:items-center">
+              <label className="text-sm font-semibold text-[var(--app-text)]">
+                Batch
+              </label>
+
+              <select
+                value={batchSize}
+                onChange={(event) => setBatchSize(Number(event.target.value))}
+                className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text)] outline-none"
+              >
+                <option value={5}>5 chunks</option>
+                <option value={25}>25 chunks</option>
+                <option value={50}>50 chunks</option>
+                <option value={100}>100 chunks</option>
+              </select>
+
+              <button
+                onClick={handleEmbedChunks}
+                disabled={busy || stats.pendingChunks === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-blue)] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--brand-blue)]/20 transition hover:bg-[var(--brand-blue-hover)] disabled:opacity-70 dark:text-[#052033]"
+              >
+                <PlayCircle size={16} />
+                {embedStatus === "loading"
+                  ? "Embedding..."
+                  : `Embed ${batchSize}`}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -152,11 +221,30 @@ export default function AdminVectors() {
             {message}
           </div>
         )}
+
+        <div className="mt-6">
+          <div className="mb-2 flex items-center justify-between text-sm">
+            <span className="font-semibold text-[var(--app-text)]">
+              Embedding progress
+            </span>
+            <span className="text-[var(--app-muted)]">{embeddedPercent}%</span>
+          </div>
+
+          <div className="h-3 overflow-hidden rounded-full bg-[var(--app-surface-muted)]">
+            <div
+              className="h-full rounded-full bg-[var(--brand-blue)] transition-all"
+              style={{ width: `${embeddedPercent}%` }}
+            />
+          </div>
+        </div>
       </section>
 
       <section className="grid gap-5 md:grid-cols-3 xl:grid-cols-6">
         <MetricCard label="Indexed docs" value={stats.indexedDocuments} />
-        <MetricCard label="Docs with vectors" value={stats.documentsWithEmbeddings} />
+        <MetricCard
+          label="Docs with vectors"
+          value={stats.documentsWithEmbeddings}
+        />
         <MetricCard label="Total chunks" value={stats.totalChunks} />
         <MetricCard label="Pending chunks" value={stats.pendingChunks} />
         <MetricCard label="Embedded chunks" value={stats.embeddedChunks} />
@@ -208,17 +296,14 @@ export default function AdminVectors() {
                 key={result.id}
                 className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4"
               >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-[var(--app-text)]">
-                      {result.payload?.documentTitle || "Untitled document"}
-                    </p>
-                    <p className="mt-1 text-xs text-[var(--app-muted)]">
-                      Chunk {result.payload?.chunkIndex} · Score{" "}
-                      {Number(result.score || 0).toFixed(4)}
-                    </p>
-                  </div>
-                </div>
+                <p className="font-semibold text-[var(--app-text)]">
+                  {result.payload?.documentTitle || "Untitled document"}
+                </p>
+
+                <p className="mt-1 text-xs text-[var(--app-muted)]">
+                  Chunk {result.payload?.chunkIndex} · Score{" "}
+                  {Number(result.score || 0).toFixed(4)}
+                </p>
 
                 <p className="mt-3 line-clamp-5 text-sm leading-6 text-[var(--app-muted)]">
                   {result.payload?.text}

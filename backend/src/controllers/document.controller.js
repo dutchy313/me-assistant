@@ -5,6 +5,7 @@ import {
   getDocuments,
   getIngestionLogs,
   processPendingDocuments,
+  resetFailedDocuments,
   syncDriveFolder
 } from "../services/document.service.js";
 
@@ -33,6 +34,20 @@ export const processDocuments = asyncHandler(async (req, res) => {
   res.status(200).json({
     status: "success",
     message: "Document processing completed",
+    data: {
+      result
+    }
+  });
+});
+
+export const resetFailedDocumentProcessing = asyncHandler(async (req, res) => {
+  const result = await resetFailedDocuments({
+    userId: req.user._id
+  });
+
+  res.status(200).json({
+    status: "success",
+    message: "Failed documents reset",
     data: {
       result
     }

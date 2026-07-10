@@ -253,7 +253,12 @@ export async function processPendingDocuments({ userId, limit = 3 }) {
         pageEnd: null,
         chapter: "",
         sectionTitle: "",
-        vectorId: ""
+        vectorId: "",
+        embeddingStatus: "pending",
+        embeddingModel: "",
+        embeddingDimensions: 0,
+        embeddingError: "",
+        embeddedAt: null
       }));
 
       await SourceChunk.insertMany(chunkDocuments);
@@ -382,6 +387,49 @@ export async function disableDocument(documentId) {
   await document.save();
 
   return document;
+}
+
+export async function resetFailedDocuments({ userId }) {
+  const failedDocuments = await Document.find({
+    status: "failed",
+    isActive: true
+  });
+
+  for (const document of failedDocuments) {
+    await SourceChunk.deleteMany({
+      documentId: document._id
+    });
+  }
+
+  const result = await Document.updateMany(
+    {
+      status: "failed",
+      isActive: true
+    },
+    {
+      $set: {
+        status: "pending",
+        errorMessage: "",
+        totalChunks: 0,
+        totalTokens: 0,
+        indexedAt: null
+      }
+    }
+  );
+
+  await IngestionLog.create({
+    action: "process_documents",
+    status: "info",
+    message: `Reset ${result.modifiedCount} failed document(s) back to pending.`,
+    createdBy: userId,
+    metadata: {
+      resetCount: result.modifiedCount
+    }
+  });
+
+  return {
+    resetCount: result.modifiedCount
+  };
 }
 
 export async function getIngestionLogs({ limit = 30 }) {

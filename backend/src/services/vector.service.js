@@ -88,7 +88,9 @@ export async function embedPendingChunks({ userId, limit = 25 }) {
       await IngestionLog.create({
         action: "chunk_embedded",
         status: "success",
-        message: `Embedded chunk ${chunk.chunkIndex} from ${chunk.documentId?.fileName || "document"}.`,
+        message: `Embedded chunk ${chunk.chunkIndex} from ${
+          chunk.documentId?.fileName || "document"
+        }.`,
         documentId: chunk.documentId?._id || null,
         chunkId: chunk._id,
         createdBy: userId,
@@ -203,5 +205,38 @@ export async function semanticSearch({ userId, query, limit = 5 }) {
   return {
     query,
     results
+  };
+}
+
+export async function resetFailedChunkEmbeddings({ userId }) {
+  const result = await SourceChunk.updateMany(
+    {
+      isActive: true,
+      embeddingStatus: "failed"
+    },
+    {
+      $set: {
+        embeddingStatus: "pending",
+        embeddingError: "",
+        vectorId: "",
+        embeddingModel: "",
+        embeddingDimensions: 0,
+        embeddedAt: null
+      }
+    }
+  );
+
+  await IngestionLog.create({
+    action: "embed_chunks",
+    status: "info",
+    message: `Reset ${result.modifiedCount} failed chunk embedding(s) back to pending.`,
+    createdBy: userId,
+    metadata: {
+      resetCount: result.modifiedCount
+    }
+  });
+
+  return {
+    resetCount: result.modifiedCount
   };
 }

@@ -3,6 +3,7 @@ import {
   embedPendingChunks,
   getVectorStats,
   prepareVectorCollection,
+  resetFailedChunkEmbeddings,
   semanticSearch
 } from "../services/vector.service.js";
 
@@ -31,6 +32,20 @@ export const embedChunks = asyncHandler(async (req, res) => {
   res.status(200).json({
     status: "success",
     message: "Chunk embedding completed",
+    data: {
+      result
+    }
+  });
+});
+
+export const resetFailedEmbeddings = asyncHandler(async (req, res) => {
+  const result = await resetFailedChunkEmbeddings({
+    userId: req.user._id
+  });
+
+  res.status(200).json({
+    status: "success",
+    message: "Failed embeddings reset",
     data: {
       result
     }

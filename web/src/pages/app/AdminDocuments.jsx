@@ -1,17 +1,19 @@
 import { useEffect, useState } from "react";
 import {
-  BookOpenCheck,
-  RefreshCw,
-  FileText,
   AlertTriangle,
+  BookOpenCheck,
   CheckCircle2,
-  PlayCircle
+  FileText,
+  PlayCircle,
+  RefreshCw,
+  RotateCcw
 } from "lucide-react";
 import {
   disableDocument,
   getAdminDocuments,
   getIngestionLogs,
   processPendingDocuments,
+  resetFailedDocuments,
   syncGoogleDriveDocuments
 } from "../../api/documentApi";
 
@@ -27,9 +29,11 @@ export default function AdminDocuments() {
     disabled: 0
   });
   const [logs, setLogs] = useState([]);
+  const [batchSize, setBatchSize] = useState(3);
   const [status, setStatus] = useState("loading");
   const [syncStatus, setSyncStatus] = useState("idle");
   const [processStatus, setProcessStatus] = useState("idle");
+  const [resetStatus, setResetStatus] = useState("idle");
   const [message, setMessage] = useState("");
 
   async function loadData() {
@@ -89,7 +93,8 @@ export default function AdminDocuments() {
       setProcessStatus("loading");
       setMessage("");
 
-      const response = await processPendingDocuments(3);
+      const safeBatchSize = Math.max(1, Math.min(Number(batchSize) || 1, 10));
+      const response = await processPendingDocuments(safeBatchSize);
 
       setMessage(
         `Processing completed. Indexed ${response.data.result.indexed}, failed ${response.data.result.failed}, selected ${response.data.result.totalSelected}.`
@@ -100,6 +105,31 @@ export default function AdminDocuments() {
     } catch (error) {
       setProcessStatus("failed");
       setMessage(error.response?.data?.message || "Document processing failed");
+    }
+  }
+
+  async function handleResetFailed() {
+    const confirmed = window.confirm(
+      "Reset failed documents back to pending so they can be processed again?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setResetStatus("loading");
+      setMessage("");
+
+      const response = await resetFailedDocuments();
+
+      setMessage(
+        `Reset ${response.data.result.resetCount} failed document(s) back to pending.`
+      );
+
+      setResetStatus("succeeded");
+      await loadData();
+    } catch (error) {
+      setResetStatus("failed");
+      setMessage(error.response?.data?.message || "Could not reset documents");
     }
   }
 
@@ -118,52 +148,84 @@ export default function AdminDocuments() {
     }
   }
 
+  const busy =
+    syncStatus === "loading" ||
+    processStatus === "loading" ||
+    resetStatus === "loading";
+
+  const indexedPercent =
+    counts.total === 0 ? 0 : Math.round((counts.indexed / counts.total) * 100);
+
   return (
     <div className="space-y-6">
       <section className="rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-8 shadow-xl shadow-[var(--brand-blue)]/10">
         <div className="mb-5 inline-flex rounded-full border border-[var(--brand-sky-border)] bg-[var(--brand-sky-soft)] px-4 py-2 text-sm font-semibold text-[var(--brand-blue)]">
-          Google Drive knowledge library
+          Safe batch processing
         </div>
 
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-[var(--app-text)]">
               Documents
             </h1>
 
             <p className="mt-3 max-w-3xl leading-7 text-[var(--app-muted)]">
-              Sync PDFs from Google Drive, extract text, and create searchable
-              chunks. Embeddings will come in the next phase.
+              Process Google Drive PDFs in controlled batches. Start small, then
+              increase batch size once processing is stable.
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              onClick={handleSync}
-              disabled={syncStatus === "loading" || processStatus === "loading"}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-blue)] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--brand-blue)]/20 transition hover:bg-[var(--brand-blue-hover)] disabled:opacity-70 dark:text-[#052033]"
-            >
-              <RefreshCw
-                size={16}
-                className={syncStatus === "loading" ? "animate-spin" : ""}
-              />
-              {syncStatus === "loading" ? "Syncing..." : "Sync Drive"}
-            </button>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={handleSync}
+                disabled={busy}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-blue)] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--brand-blue)]/20 transition hover:bg-[var(--brand-blue-hover)] disabled:opacity-70 dark:text-[#052033]"
+              >
+                <RefreshCw
+                  size={16}
+                  className={syncStatus === "loading" ? "animate-spin" : ""}
+                />
+                {syncStatus === "loading" ? "Syncing..." : "Sync Drive"}
+              </button>
 
-            <button
-              onClick={handleProcess}
-              disabled={
-                processStatus === "loading" ||
-                syncStatus === "loading" ||
-                counts.pending === 0
-              }
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-5 py-3 text-sm font-semibold text-[var(--app-text)] transition hover:bg-[var(--brand-sky-soft)] hover:text-[var(--brand-blue)] disabled:opacity-50"
-            >
-              <PlayCircle size={16} />
-              {processStatus === "loading"
-                ? "Processing..."
-                : "Process 3 pending"}
-            </button>
+              <button
+                onClick={handleResetFailed}
+                disabled={busy || counts.failed === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-5 py-3 text-sm font-semibold text-[var(--app-text)] transition hover:bg-[var(--brand-sky-soft)] hover:text-[var(--brand-blue)] disabled:opacity-50"
+              >
+                <RotateCcw size={16} />
+                Reset failed
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-3 sm:flex-row sm:items-center">
+              <label className="text-sm font-semibold text-[var(--app-text)]">
+                Batch
+              </label>
+
+              <select
+                value={batchSize}
+                onChange={(event) => setBatchSize(Number(event.target.value))}
+                className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text)] outline-none"
+              >
+                <option value={1}>1 document</option>
+                <option value={3}>3 documents</option>
+                <option value={5}>5 documents</option>
+                <option value={10}>10 documents</option>
+              </select>
+
+              <button
+                onClick={handleProcess}
+                disabled={busy || counts.pending === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-blue)] px-5 py-3 text-sm font-semibold text-white transition disabled:opacity-60 dark:text-[#052033]"
+              >
+                <PlayCircle size={16} />
+                {processStatus === "loading"
+                  ? "Processing..."
+                  : `Process ${batchSize}`}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -172,34 +234,30 @@ export default function AdminDocuments() {
             {message}
           </div>
         )}
+
+        <div className="mt-6">
+          <div className="mb-2 flex items-center justify-between text-sm">
+            <span className="font-semibold text-[var(--app-text)]">
+              Processing progress
+            </span>
+            <span className="text-[var(--app-muted)]">{indexedPercent}%</span>
+          </div>
+
+          <div className="h-3 overflow-hidden rounded-full bg-[var(--app-surface-muted)]">
+            <div
+              className="h-full rounded-full bg-[var(--brand-blue)] transition-all"
+              style={{ width: `${indexedPercent}%` }}
+            />
+          </div>
+        </div>
       </section>
 
       <section className="grid gap-5 md:grid-cols-5">
-        <MetricCard
-          icon={<BookOpenCheck />}
-          label="Documents"
-          value={counts.total}
-        />
-        <MetricCard
-          icon={<CheckCircle2 />}
-          label="Pending"
-          value={counts.pending}
-        />
-        <MetricCard
-          icon={<RefreshCw />}
-          label="Processing"
-          value={counts.processing}
-        />
-        <MetricCard
-          icon={<FileText />}
-          label="Indexed"
-          value={counts.indexed}
-        />
-        <MetricCard
-          icon={<AlertTriangle />}
-          label="Failed"
-          value={counts.failed}
-        />
+        <MetricCard icon={<BookOpenCheck />} label="Documents" value={counts.total} />
+        <MetricCard icon={<CheckCircle2 />} label="Pending" value={counts.pending} />
+        <MetricCard icon={<RefreshCw />} label="Processing" value={counts.processing} />
+        <MetricCard icon={<FileText />} label="Indexed" value={counts.indexed} />
+        <MetricCard icon={<AlertTriangle />} label="Failed" value={counts.failed} />
       </section>
 
       <section className="rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-6">
