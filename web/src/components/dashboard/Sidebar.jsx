@@ -5,6 +5,7 @@ import {
   FileText,
   Home,
   MessageSquareText,
+  Search,
   Settings,
   ShieldCheck
 } from "lucide-react";
@@ -52,6 +53,11 @@ const adminLinks = [
     to: "/dashboard/admin/vectors",
     label: "Vectors",
     icon: BrainCircuit
+  },
+  {
+    to: "/dashboard/admin/retrieval",
+    label: "Retrieval",
+    icon: Search
   },
   {
     to: "/dashboard/admin/usage",

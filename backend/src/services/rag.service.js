@@ -16,12 +16,18 @@ function getChatModel() {
   return process.env.OPENAI_CHAT_MODEL || "gpt-4.1-mini";
 }
 
-function getRagConfig() {
+function getRagConfig(overrides = {}) {
   return {
-    topK: Number(process.env.RAG_TOP_K || 5),
-    candidateK: Number(process.env.RAG_CANDIDATE_K || 20),
-    minScore: Number(process.env.RAG_MIN_SCORE || 0.2),
-    maxChunksPerDocument: Number(process.env.RAG_MAX_CHUNKS_PER_DOCUMENT || 2)
+    topK: Number(overrides.topK || process.env.RAG_TOP_K || 5),
+    candidateK: Number(
+      overrides.candidateK || process.env.RAG_CANDIDATE_K || 20
+    ),
+    minScore: Number(overrides.minScore ?? process.env.RAG_MIN_SCORE ?? 0.2),
+    maxChunksPerDocument: Number(
+      overrides.maxChunksPerDocument ||
+        process.env.RAG_MAX_CHUNKS_PER_DOCUMENT ||
+        2
+    )
   };
 }
 
@@ -34,38 +40,15 @@ export async function answerQuestionWithRag({
     conversationMessages
   });
 
-  const { topK, candidateK, minScore, maxChunksPerDocument } = getRagConfig();
-
-  const queryEmbedding = await createEmbedding(standaloneQuestion);
-
-  const qdrantResult = await searchChunkVectors({
-    vector: queryEmbedding.embedding,
-    limit: candidateK
+  const retrievalResult = await retrieveRelevantChunks({
+    question: standaloneQuestion
   });
 
-  const rawPoints = qdrantResult.result?.points || qdrantResult.result || [];
-
-  const selectedPoints = selectDiverseRelevantPoints({
-    points: rawPoints,
-    minScore,
-    topK,
-    maxChunksPerDocument
-  });
-
-  const citations = selectedPoints.map((point, index) => {
-    const payload = point.payload || {};
-
-    return {
-      sourceNumber: index + 1,
-      chunkId: payload.chunkId || String(point.id),
-      documentId: payload.documentId || "",
-      documentTitle: payload.documentTitle || "Untitled source",
-      fileName: payload.fileName || "",
-      chunkIndex: Number(payload.chunkIndex || 0),
-      score: Number(point.score || 0),
-      excerpt: createExcerpt(payload.text || "")
-    };
-  });
+  const {
+    selectedPoints,
+    citations,
+    retrievalConfig: { topK, minScore }
+  } = retrievalResult;
 
   if (citations.length === 0) {
     return {
@@ -83,22 +66,7 @@ export async function answerQuestionWithRag({
     };
   }
 
-  const sourceBlock = selectedPoints
-    .map((point, index) => {
-      const payload = point.payload || {};
-
-      return [
-        `SOURCE ${index + 1}`,
-        `Title: ${payload.documentTitle || "Untitled source"}`,
-        `File: ${payload.fileName || "Unknown file"}`,
-        `Chunk: ${payload.chunkIndex ?? "unknown"}`,
-        `Score: ${Number(point.score || 0).toFixed(4)}`,
-        "Text:",
-        payload.text || ""
-      ].join("\n");
-    })
-    .join("\n\n---\n\n");
-
+  const sourceBlock = buildSourceBlock(selectedPoints);
   const conversationBlock = buildConversationBlock(conversationMessages);
 
   const client = getOpenAIClient();
@@ -149,6 +117,79 @@ export async function answerQuestionWithRag({
       originalQuestion: question,
       standaloneQuestion
     }
+  };
+}
+
+export async function retrieveRelevantChunks({
+  question,
+  topK,
+  candidateK,
+  minScore,
+  maxChunksPerDocument
+}) {
+  const retrievalConfig = getRagConfig({
+    topK,
+    candidateK,
+    minScore,
+    maxChunksPerDocument
+  });
+
+  const queryEmbedding = await createEmbedding(question);
+
+  const qdrantResult = await searchChunkVectors({
+    vector: queryEmbedding.embedding,
+    limit: retrievalConfig.candidateK
+  });
+
+  const rawPoints = qdrantResult.result?.points || qdrantResult.result || [];
+
+  const selectedPoints = selectDiverseRelevantPoints({
+    points: rawPoints,
+    minScore: retrievalConfig.minScore,
+    topK: retrievalConfig.topK,
+    maxChunksPerDocument: retrievalConfig.maxChunksPerDocument
+  });
+
+  const citations = selectedPoints.map((point, index) => {
+    const payload = point.payload || {};
+
+    return {
+      sourceNumber: index + 1,
+      chunkId: payload.chunkId || String(point.id),
+      documentId: payload.documentId || "",
+      documentTitle: payload.documentTitle || "Untitled source",
+      fileName: payload.fileName || "",
+      chunkIndex: Number(payload.chunkIndex || 0),
+      score: Number(point.score || 0),
+      excerpt: createExcerpt(payload.text || "")
+    };
+  });
+
+  const rawCandidates = rawPoints.map((point, index) => {
+    const payload = point.payload || {};
+
+    return {
+      rank: index + 1,
+      id: point.id,
+      score: Number(point.score || 0),
+      chunkId: payload.chunkId || String(point.id),
+      documentId: payload.documentId || "",
+      documentTitle: payload.documentTitle || "Untitled source",
+      fileName: payload.fileName || "",
+      chunkIndex: Number(payload.chunkIndex || 0),
+      excerpt: createExcerpt(payload.text || ""),
+      selected: citations.some(
+        (citation) => citation.chunkId === (payload.chunkId || String(point.id))
+      )
+    };
+  });
+
+  return {
+    question,
+    retrievalConfig,
+    selectedPoints,
+    citations,
+    rawCandidates
   };
 }
 
@@ -229,6 +270,24 @@ function selectDiverseRelevantPoints({
   }
 
   return selected;
+}
+
+function buildSourceBlock(points) {
+  return points
+    .map((point, index) => {
+      const payload = point.payload || {};
+
+      return [
+        `SOURCE ${index + 1}`,
+        `Title: ${payload.documentTitle || "Untitled source"}`,
+        `File: ${payload.fileName || "Unknown file"}`,
+        `Chunk: ${payload.chunkIndex ?? "unknown"}`,
+        `Score: ${Number(point.score || 0).toFixed(4)}`,
+        "Text:",
+        payload.text || ""
+      ].join("\n");
+    })
+    .join("\n\n---\n\n");
 }
 
 function buildConversationBlock(messages = []) {
