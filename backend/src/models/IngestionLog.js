@@ -10,17 +10,17 @@ const ingestionLogSchema = new mongoose.Schema(
         "document_updated",
         "document_skipped",
         "document_failed",
-
         "process_documents",
         "document_processing_started",
         "document_indexed",
         "document_processing_failed",
-
-        "qdrant_collection_ready",
+        "prepare_qdrant_collection",
         "embed_chunks",
         "chunk_embedded",
         "chunk_embedding_failed",
-        "semantic_search"
+        "metadata_suggest_batch",
+        "metadata_suggested",
+        "metadata_suggestion_failed"
       ],
       required: true,
       index: true
@@ -28,8 +28,8 @@ const ingestionLogSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["success", "failed", "info"],
-      default: "info",
+      enum: ["info", "success", "failed"],
+      required: true,
       index: true
     },
 
@@ -42,13 +42,8 @@ const ingestionLogSchema = new mongoose.Schema(
     documentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Document",
-      default: null
-    },
-
-    chunkId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "SourceChunk",
-      default: null
+      default: null,
+      index: true
     },
 
     driveFileId: {
@@ -57,15 +52,15 @@ const ingestionLogSchema = new mongoose.Schema(
       default: ""
     },
 
-    metadata: {
-      type: Object,
-      default: {}
-    },
-
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null
+    },
+
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {}
     }
   },
   {

@@ -1,7 +1,20 @@
 import api from "./axios";
 
-export async function getAdminDocuments() {
-  const response = await api.get("/admin/documents");
+export async function getAdminDocuments({
+  page = 1,
+  limit = 20,
+  status = "",
+  metadataStatus = ""
+} = {}) {
+  const response = await api.get("/admin/documents", {
+    params: {
+      page,
+      limit,
+      status,
+      metadataStatus
+    }
+  });
+
   return response.data;
 }
 
@@ -16,6 +29,27 @@ export async function updateDocumentMetadata(documentId, payload) {
     payload
   );
 
+  return response.data;
+}
+
+export async function suggestDocumentMetadata(documentId) {
+  const response = await api.post(
+    `/admin/documents/${documentId}/suggest-metadata`
+  );
+
+  return response.data;
+}
+
+export async function suggestMetadataBatch(limit = 3) {
+  const response = await api.post("/admin/documents/suggest-metadata-batch", {
+    limit
+  });
+
+  return response.data;
+}
+
+export async function reprocessDocument(documentId) {
+  const response = await api.post(`/admin/documents/${documentId}/reprocess`);
   return response.data;
 }
 

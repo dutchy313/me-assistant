@@ -91,6 +91,29 @@ export async function upsertChunkVector({ pointId, vector, payload }) {
   });
 }
 
+export async function deleteChunkVectors(pointIds = []) {
+  const { collectionName } = getQdrantConfig();
+
+  const cleanPointIds = pointIds.filter(Boolean);
+
+  if (cleanPointIds.length === 0) {
+    return {
+      deleted: 0
+    };
+  }
+
+  await qdrantRequest(`/collections/${collectionName}/points/delete?wait=true`, {
+    method: "POST",
+    body: JSON.stringify({
+      points: cleanPointIds
+    })
+  });
+
+  return {
+    deleted: cleanPointIds.length
+  };
+}
+
 export async function searchChunkVectors({ vector, limit = 5 }) {
   const { collectionName } = getQdrantConfig();
 

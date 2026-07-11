@@ -1,34 +1,49 @@
 import { z } from "zod";
 
-export const updateDocumentMetadataSchema = z.object({
-  canonicalTitle: z.string().trim().max(1000).optional().default(""),
+function optionalYear() {
+  return z.preprocess(
+    (value) => {
+      if (value === "" || value === null || value === undefined) {
+        return null;
+      }
 
-  authors: z
-    .array(z.string().trim().min(1).max(200))
-    .optional()
-    .default([]),
+      if (typeof value === "string") {
+        const parsed = Number(value);
+        return Number.isNaN(parsed) ? value : parsed;
+      }
 
-  publicationYear: z
-    .number()
-    .int()
-    .min(1000)
-    .max(new Date().getFullYear() + 1)
-    .optional()
-    .nullable(),
+      return value;
+    },
+    z
+      .number()
+      .int()
+      .min(1000)
+      .max(new Date().getFullYear() + 1)
+      .nullable()
+      .optional()
+  );
+}
 
-  publisher: z.string().trim().max(300).optional().default(""),
+export const updateDocumentMetadataSchema = z
+  .object({
+    canonicalTitle: z.string().trim().max(1000).optional(),
 
-  citationLabel: z.string().trim().max(300).optional().default(""),
+    authors: z.array(z.string().trim().min(1).max(200)).optional(),
 
-  sourceType: z
-    .enum(["book", "manual", "guide", "report", "web", "other"])
-    .optional()
-    .default("book"),
+    publicationYear: optionalYear(),
 
-  metadataStatus: z
-    .enum(["auto", "needs_review", "reviewed"])
-    .optional()
-    .default("reviewed"),
+    publisher: z.string().trim().max(300).optional(),
 
-  metadataNotes: z.string().trim().max(2000).optional().default("")
-});
+    citationLabel: z.string().trim().max(300).optional(),
+
+    sourceType: z
+      .enum(["book", "manual", "guide", "report", "web", "other"])
+      .optional(),
+
+    metadataStatus: z.enum(["auto", "needs_review", "reviewed"]).optional(),
+
+    metadataNotes: z.string().trim().max(2000).optional()
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one metadata field is required"
+  });
