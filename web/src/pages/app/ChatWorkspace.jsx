@@ -321,7 +321,24 @@ function Sources({ citations, messageId, sessionId }) {
             className="rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-3"
           >
             <p className="text-sm font-semibold text-[var(--app-text)]">
-              [{citation.sourceNumber}] {citation.documentTitle}
+              [{citation.sourceNumber}]{" "}
+              {citation.citationLabel ||
+                citation.canonicalTitle ||
+                citation.documentTitle}
+            </p>
+
+            {citation.canonicalTitle && (
+              <p className="mt-1 text-xs font-medium text-[var(--app-muted)]">
+                {citation.canonicalTitle}
+              </p>
+            )}
+
+            <p className="mt-1 text-xs text-[var(--app-muted)]">
+              {citation.authors?.length > 0
+                ? citation.authors.join(", ")
+                : "Unknown author"}
+              {citation.publicationYear ? ` · ${citation.publicationYear}` : ""}
+              {citation.publisher ? ` · ${citation.publisher}` : ""}
             </p>
 
             <p className="mt-1 text-xs text-[var(--app-muted)]">

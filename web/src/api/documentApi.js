@@ -5,6 +5,20 @@ export async function getAdminDocuments() {
   return response.data;
 }
 
+export async function getSingleDocument(documentId) {
+  const response = await api.get(`/admin/documents/${documentId}`);
+  return response.data;
+}
+
+export async function updateDocumentMetadata(documentId, payload) {
+  const response = await api.patch(
+    `/admin/documents/${documentId}/metadata`,
+    payload
+  );
+
+  return response.data;
+}
+
 export async function syncGoogleDriveDocuments() {
   const response = await api.post("/admin/documents/sync-drive");
   return response.data;
