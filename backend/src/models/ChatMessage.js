@@ -22,6 +22,31 @@ const citationSchema = new mongoose.Schema(
       default: ""
     },
 
+    canonicalTitle: {
+      type: String,
+      default: ""
+    },
+
+    citationLabel: {
+      type: String,
+      default: ""
+    },
+
+    authors: {
+      type: [String],
+      default: []
+    },
+
+    publicationYear: {
+      type: Number,
+      default: null
+    },
+
+    publisher: {
+      type: String,
+      default: ""
+    },
+
     fileName: {
       type: String,
       default: ""

@@ -8,6 +8,49 @@ const documentSchema = new mongoose.Schema(
       trim: true
     },
 
+    canonicalTitle: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    authors: [
+      {
+        type: String,
+        trim: true
+      }
+    ],
+
+    publicationYear: {
+      type: Number,
+      default: null
+    },
+
+    publisher: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    citationLabel: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    metadataStatus: {
+      type: String,
+      enum: ["auto", "needs_review", "reviewed"],
+      default: "auto",
+      index: true
+    },
+
+    metadataNotes: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
     author: {
       type: String,
       trim: true,
@@ -35,8 +78,7 @@ const documentSchema = new mongoose.Schema(
     driveFileId: {
       type: String,
       required: true,
-      unique: true,
-      index: true
+      unique: true
     },
 
     driveMimeType: {

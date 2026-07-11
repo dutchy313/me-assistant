@@ -77,6 +77,13 @@ export async function syncDriveFolder({ userId }) {
       if (!existingDocument) {
         const createdDocument = await Document.create({
           ...mappedDocument,
+          canonicalTitle: "",
+          authors: [],
+          publicationYear: null,
+          publisher: "",
+          citationLabel: "",
+          metadataStatus: "auto",
+          metadataNotes: "",
           status: "pending"
         });
 
@@ -135,6 +142,10 @@ export async function syncDriveFolder({ userId }) {
       existingDocument.totalChunks = 0;
       existingDocument.totalTokens = 0;
       existingDocument.indexedAt = null;
+
+      if (!existingDocument.metadataStatus) {
+        existingDocument.metadataStatus = "auto";
+      }
 
       await existingDocument.save();
 
@@ -332,13 +343,21 @@ export async function getDocuments({ page = 1, limit = 20, status }) {
 
   const skip = (page - 1) * limit;
 
-  const [documents, total, statusCounts] = await Promise.all([
+  const [documents, total, statusCounts, metadataCounts] = await Promise.all([
     Document.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
     Document.countDocuments(query),
     Document.aggregate([
       {
         $group: {
           _id: "$status",
+          count: { $sum: 1 }
+        }
+      }
+    ]),
+    Document.aggregate([
+      {
+        $group: {
+          _id: "$metadataStatus",
           count: { $sum: 1 }
         }
       }
@@ -351,12 +370,29 @@ export async function getDocuments({ page = 1, limit = 20, status }) {
     processing: 0,
     indexed: 0,
     failed: 0,
-    disabled: 0
+    disabled: 0,
+    metadataAuto: 0,
+    metadataNeedsReview: 0,
+    metadataReviewed: 0
   };
 
   for (const item of statusCounts) {
     counts[item._id] = item.count;
     counts.total += item.count;
+  }
+
+  for (const item of metadataCounts) {
+    if (item._id === "auto" || !item._id) {
+      counts.metadataAuto += item.count;
+    }
+
+    if (item._id === "needs_review") {
+      counts.metadataNeedsReview += item.count;
+    }
+
+    if (item._id === "reviewed") {
+      counts.metadataReviewed += item.count;
+    }
   }
 
   return {
@@ -373,6 +409,27 @@ export async function getDocuments({ page = 1, limit = 20, status }) {
 
 export async function getDocumentById(documentId) {
   return Document.findById(documentId);
+}
+
+export async function updateDocumentMetadata(documentId, payload) {
+  const document = await Document.findById(documentId);
+
+  if (!document) {
+    return null;
+  }
+
+  document.canonicalTitle = payload.canonicalTitle || "";
+  document.authors = Array.isArray(payload.authors) ? payload.authors : [];
+  document.publicationYear = payload.publicationYear || null;
+  document.publisher = payload.publisher || "";
+  document.citationLabel = payload.citationLabel || "";
+  document.sourceType = payload.sourceType || document.sourceType || "book";
+  document.metadataStatus = payload.metadataStatus || "reviewed";
+  document.metadataNotes = payload.metadataNotes || "";
+
+  await document.save();
+
+  return document;
 }
 
 export async function disableDocument(documentId) {

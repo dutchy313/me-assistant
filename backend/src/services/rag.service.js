@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import SourceChunk from "../models/SourceChunk.js";
 import { createEmbedding } from "./embedding.service.js";
 import { searchChunkVectors } from "./qdrant.service.js";
 
@@ -142,9 +143,10 @@ export async function retrieveRelevantChunks({
   });
 
   const rawPoints = qdrantResult.result?.points || qdrantResult.result || [];
+  const enrichedRawPoints = await enrichPointsWithMongoMetadata(rawPoints);
 
   const selectedPoints = selectDiverseRelevantPoints({
-    points: rawPoints,
+    points: enrichedRawPoints,
     minScore: retrievalConfig.minScore,
     topK: retrievalConfig.topK,
     maxChunksPerDocument: retrievalConfig.maxChunksPerDocument
@@ -158,6 +160,11 @@ export async function retrieveRelevantChunks({
       chunkId: payload.chunkId || String(point.id),
       documentId: payload.documentId || "",
       documentTitle: payload.documentTitle || "Untitled source",
+      canonicalTitle: payload.canonicalTitle || payload.documentTitle || "",
+      citationLabel: payload.citationLabel || "",
+      authors: payload.authors || [],
+      publicationYear: payload.publicationYear || null,
+      publisher: payload.publisher || "",
       fileName: payload.fileName || "",
       chunkIndex: Number(payload.chunkIndex || 0),
       score: Number(point.score || 0),
@@ -165,22 +172,26 @@ export async function retrieveRelevantChunks({
     };
   });
 
-  const rawCandidates = rawPoints.map((point, index) => {
+  const rawCandidates = enrichedRawPoints.map((point, index) => {
     const payload = point.payload || {};
+    const chunkId = payload.chunkId || String(point.id);
 
     return {
       rank: index + 1,
       id: point.id,
       score: Number(point.score || 0),
-      chunkId: payload.chunkId || String(point.id),
+      chunkId,
       documentId: payload.documentId || "",
       documentTitle: payload.documentTitle || "Untitled source",
+      canonicalTitle: payload.canonicalTitle || payload.documentTitle || "",
+      citationLabel: payload.citationLabel || "",
+      authors: payload.authors || [],
+      publicationYear: payload.publicationYear || null,
+      publisher: payload.publisher || "",
       fileName: payload.fileName || "",
       chunkIndex: Number(payload.chunkIndex || 0),
       excerpt: createExcerpt(payload.text || ""),
-      selected: citations.some(
-        (citation) => citation.chunkId === (payload.chunkId || String(point.id))
-      )
+      selected: citations.some((citation) => citation.chunkId === chunkId)
     };
   });
 
@@ -239,6 +250,101 @@ export async function rewriteQuestionWithConversation({
   return rewritten.slice(0, 1000);
 }
 
+async function enrichPointsWithMongoMetadata(points) {
+  const chunkIds = points
+    .map((point) => point.payload?.chunkId)
+    .filter((chunkId) => /^[0-9a-fA-F]{24}$/.test(chunkId));
+
+  if (chunkIds.length === 0) {
+    return points;
+  }
+
+  const chunks = await SourceChunk.find({
+    _id: { $in: chunkIds }
+  }).populate(
+    "documentId",
+    "title canonicalTitle authors publicationYear publisher citationLabel metadataStatus fileName sourceType"
+  );
+
+  const chunkMap = new Map();
+
+  for (const chunk of chunks) {
+    chunkMap.set(chunk._id.toString(), chunk);
+  }
+
+  return points.map((point) => {
+    const payload = point.payload || {};
+    const chunk = chunkMap.get(payload.chunkId);
+
+    if (!chunk || !chunk.documentId) {
+      return point;
+    }
+
+    const document = chunk.documentId;
+    const canonicalTitle = document.canonicalTitle || document.title || "";
+    const citationLabel =
+      document.citationLabel ||
+      createCitationLabel({
+        authors: document.authors || [],
+        publicationYear: document.publicationYear,
+        fallbackTitle: canonicalTitle
+      });
+
+    return {
+      ...point,
+      payload: {
+        ...payload,
+        documentId: document._id.toString(),
+        documentTitle: canonicalTitle || document.title || payload.documentTitle,
+        canonicalTitle,
+        citationLabel,
+        authors: document.authors || [],
+        publicationYear: document.publicationYear || null,
+        publisher: document.publisher || "",
+        fileName: document.fileName || payload.fileName || "",
+        sourceType: document.sourceType || payload.sourceType || ""
+      }
+    };
+  });
+}
+
+function createCitationLabel({ authors = [], publicationYear, fallbackTitle }) {
+  if (authors.length === 0) {
+    return publicationYear
+      ? `${fallbackTitle}, ${publicationYear}`
+      : fallbackTitle || "Untitled source";
+  }
+
+  const firstAuthorLastName = getLastName(authors[0]);
+
+  if (authors.length === 1) {
+    return publicationYear
+      ? `${firstAuthorLastName}, ${publicationYear}`
+      : firstAuthorLastName;
+  }
+
+  if (authors.length === 2) {
+    return publicationYear
+      ? `${getLastName(authors[0])} & ${getLastName(authors[1])}, ${publicationYear}`
+      : `${getLastName(authors[0])} & ${getLastName(authors[1])}`;
+  }
+
+  return publicationYear
+    ? `${firstAuthorLastName} et al., ${publicationYear}`
+    : `${firstAuthorLastName} et al.`;
+}
+
+function getLastName(authorName = "") {
+  const clean = authorName.trim();
+
+  if (!clean) {
+    return "Unknown";
+  }
+
+  const parts = clean.split(/\s+/);
+  return parts[parts.length - 1];
+}
+
 function selectDiverseRelevantPoints({
   points,
   minScore,
@@ -276,10 +382,16 @@ function buildSourceBlock(points) {
   return points
     .map((point, index) => {
       const payload = point.payload || {};
+      const sourceLabel =
+        payload.citationLabel || payload.documentTitle || "Untitled source";
 
       return [
         `SOURCE ${index + 1}`,
-        `Title: ${payload.documentTitle || "Untitled source"}`,
+        `Citation label: ${sourceLabel}`,
+        `Title: ${payload.canonicalTitle || payload.documentTitle || "Untitled source"}`,
+        `Authors: ${(payload.authors || []).join(", ") || "Unknown"}`,
+        `Year: ${payload.publicationYear || "Unknown"}`,
+        `Publisher: ${payload.publisher || "Unknown"}`,
         `File: ${payload.fileName || "Unknown file"}`,
         `Chunk: ${payload.chunkIndex ?? "unknown"}`,
         `Score: ${Number(point.score || 0).toFixed(4)}`,
