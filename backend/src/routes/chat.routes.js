@@ -1,19 +1,40 @@
 import express from "express";
 import {
-  askQuestion,
-  listMessages,
-  listSessions
+  askChatQuestion,
+  getChatSession,
+  getChatSessionMessages,
+  listChatSessions,
+  sendChatMessage,
+  sendChatSessionMessage
 } from "../controllers/chat.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
-import { validate } from "../middlewares/validate.middleware.js";
-import { askQuestionSchema } from "../validations/chat.validation.js";
 
 const router = express.Router();
 
 router.use(requireAuth);
 
-router.post("/ask", validate(askQuestionSchema), askQuestion);
-router.get("/sessions", listSessions);
-router.get("/sessions/:sessionId/messages", listMessages);
+router.get("/sessions", listChatSessions);
+
+/*
+  Older frontend route for asking a question.
+  Keep this because ChatWorkspace currently calls /chat/ask.
+*/
+router.post("/ask", askChatQuestion);
+
+/*
+  Current/simple route for asking a question.
+*/
+router.post("/message", sendChatMessage);
+
+/*
+  Older frontend routes for loading and sending messages in a session.
+*/
+router.get("/sessions/:sessionId/messages", getChatSessionMessages);
+router.post("/sessions/:sessionId/messages", sendChatSessionMessage);
+
+/*
+  Current/simple route for loading one session with messages.
+*/
+router.get("/sessions/:sessionId", getChatSession);
 
 export default router;

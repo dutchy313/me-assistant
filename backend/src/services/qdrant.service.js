@@ -21,27 +21,61 @@ function getQdrantConfig() {
 async function qdrantRequest(path, options = {}) {
   const { url, apiKey } = getQdrantConfig();
 
-  const response = await fetch(`${url}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "api-key": apiKey,
-      ...(options.headers || {})
+  const maxAttempts = 3;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const response = await fetch(`${url}${path}`, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": apiKey,
+          ...(options.headers || {})
+        }
+      });
+
+      clearTimeout(timeoutId);
+
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
+
+      if (!response.ok) {
+        throw new Error(
+          data?.status?.error ||
+            data?.message ||
+            `Qdrant request failed: ${response.status}`
+        );
+      }
+
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      lastError = error;
+
+      const isLastAttempt = attempt === maxAttempts;
+
+      if (isLastAttempt) {
+        break;
+      }
+
+      await wait(750 * attempt);
     }
-  });
-
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
-
-  if (!response.ok) {
-    throw new Error(
-      data?.status?.error ||
-        data?.message ||
-        `Qdrant request failed: ${response.status}`
-    );
   }
 
-  return data;
+  throw new Error(
+    `Qdrant request failed after ${maxAttempts} attempts: ${
+      lastError?.message || "Unknown Qdrant error"
+    }`
+  );
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function ensureQdrantCollection() {

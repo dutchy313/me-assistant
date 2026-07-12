@@ -58,11 +58,7 @@ export async function getChatSessionWithMessages({ sessionId, userId }) {
   };
 }
 
-export async function createChatAnswer({
-  userId,
-  sessionId,
-  question
-}) {
+export async function createChatAnswer({ userId, sessionId, question }) {
   if (!question || !question.trim()) {
     throw new Error("Question is required");
   }
@@ -106,6 +102,7 @@ export async function createChatAnswer({
   });
 
   const retrievedChunks = await hydrateRetrievedChunks(rawSearchResults);
+
   const eligibleChunks = retrievedChunks.filter((chunk) => {
     return chunk.score >= ragConfig.minScore;
   });
@@ -318,11 +315,7 @@ function normalizeQdrantSearchResponse(searchResponse) {
   return [];
 }
 
-function selectDiverseChunks({
-  chunks,
-  topK,
-  maxChunksPerDocument
-}) {
+function selectDiverseChunks({ chunks, topK, maxChunksPerDocument }) {
   const selected = [];
   const perDocumentCount = new Map();
 
@@ -411,7 +404,8 @@ async function generateAnswer({ question, rewrittenQuestion, contextText }) {
 }
 
 function buildCitations(chunks) {
-  return chunks.map((chunk) => ({
+  return chunks.map((chunk, index) => ({
+    sourceNumber: index + 1,
     documentId: chunk.documentId,
     chunkId: chunk.chunkId,
     documentTitle: chunk.documentTitle || "",
