@@ -8,8 +8,9 @@ import adminRoutes from "./routes/admin.routes.js";
 import feedbackRoutes from "./routes/feedback.routes.js";
 import documentRoutes from "./routes/document.routes.js";
 import vectorRoutes from "./routes/vector.routes.js";
-import chatRoutes from "./routes/chat.routes.js";
 import retrievalRoutes from "./routes/retrieval.routes.js";
+import chatRoutes from "./routes/chat.routes.js";
+import ragEvaluationRoutes from "./routes/ragEvaluation.routes.js";
 
 const app = express();
 
@@ -30,8 +31,9 @@ app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/feedback", feedbackRoutes);
 app.use("/api/v1/admin/documents", documentRoutes);
 app.use("/api/v1/admin/vectors", vectorRoutes);
-app.use("/api/v1/chat", chatRoutes);
 app.use("/api/v1/admin/retrieval", retrievalRoutes);
+app.use("/api/v1/admin/evaluations", ragEvaluationRoutes);
+app.use("/api/v1/chat", chatRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
