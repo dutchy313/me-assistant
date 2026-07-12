@@ -18,6 +18,7 @@ import AdminFeedbackSummary from "./pages/app/AdminFeedbackSummary";
 import AdminDocuments from "./pages/app/AdminDocuments";
 import AdminVectors from "./pages/app/AdminVectors";
 import AdminRetrieval from "./pages/app/AdminRetrieval";
+import AdminEvaluations from "./pages/app/AdminEvaluations";
 
 import { fetchMeThunk } from "./store/authSlice";
 
@@ -103,6 +104,15 @@ export default function App() {
             element={
               <AdminOnly token={token} user={user}>
                 <AdminRetrieval />
+              </AdminOnly>
+            }
+          />
+
+          <Route
+            path="/dashboard/admin/evaluations"
+            element={
+              <AdminOnly token={token} user={user}>
+                <AdminEvaluations />
               </AdminOnly>
             }
           />

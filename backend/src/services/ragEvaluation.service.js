@@ -169,6 +169,61 @@ export async function getRagEvaluationSummary() {
   };
 }
 
+export async function evaluatePendingRagSnapshots({ userId, limit = 3 }) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 3, 1), 10);
+
+  const snapshots = await RagEvaluationSnapshot.find({
+    evaluationStatus: {
+      $in: ["not_evaluated", "failed"]
+    }
+  })
+    .sort({ createdAt: -1 })
+    .limit(safeLimit);
+
+  const results = {
+    totalSelected: snapshots.length,
+    evaluated: 0,
+    alreadyEvaluated: 0,
+    failed: 0,
+    items: []
+  };
+
+  for (const snapshot of snapshots) {
+    try {
+      const result = await evaluateRagSnapshot({
+        snapshotId: snapshot._id,
+        userId
+      });
+
+      if (result?.alreadyEvaluated) {
+        results.alreadyEvaluated += 1;
+      } else {
+        results.evaluated += 1;
+      }
+
+      results.items.push({
+        snapshotId: snapshot._id,
+        originalQuestion: snapshot.originalQuestion,
+        status: "evaluated",
+        alreadyEvaluated: Boolean(result?.alreadyEvaluated),
+        overallScore: result?.evaluation?.overallScore || null,
+        overallLabel: result?.evaluation?.overallLabel || ""
+      });
+    } catch (error) {
+      results.failed += 1;
+
+      results.items.push({
+        snapshotId: snapshot._id,
+        originalQuestion: snapshot.originalQuestion,
+        status: "failed",
+        error: error.message
+      });
+    }
+  }
+
+  return results;
+}
+
 export async function evaluateRagSnapshot({ snapshotId, userId }) {
   const snapshot = await RagEvaluationSnapshot.findById(snapshotId);
 

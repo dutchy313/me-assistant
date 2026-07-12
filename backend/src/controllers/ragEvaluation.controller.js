@@ -1,5 +1,6 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
+  evaluatePendingRagSnapshots,
   evaluateRagSnapshot,
   getRagEvaluationSummary,
   listEvaluationSnapshots,
@@ -59,5 +60,20 @@ export const evaluateSnapshot = asyncHandler(async (req, res) => {
       ? "Snapshot was already evaluated"
       : "Snapshot evaluated successfully",
     data: result
+  });
+});
+
+export const evaluateSnapshotsBatch = asyncHandler(async (req, res) => {
+  const result = await evaluatePendingRagSnapshots({
+    userId: req.user._id,
+    limit: Number(req.body.limit || 3)
+  });
+
+  res.status(200).json({
+    status: "success",
+    message: "Batch evaluation completed",
+    data: {
+      result
+    }
   });
 });

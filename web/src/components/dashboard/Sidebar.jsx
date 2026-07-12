@@ -3,6 +3,7 @@ import {
   BookOpenCheck,
   BrainCircuit,
   FileText,
+  ClipboardCheck,
   Home,
   MessageSquareText,
   Search,
@@ -58,6 +59,11 @@ const adminLinks = [
     to: "/dashboard/admin/retrieval",
     label: "Retrieval",
     icon: Search
+  },
+  {
+    to: "/dashboard/admin/evaluations",
+    label: "Evaluations",
+    icon: ClipboardCheck
   },
   {
     to: "/dashboard/admin/usage",
