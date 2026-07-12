@@ -4,9 +4,11 @@ import {
   getDocumentById,
   getDocuments,
   getIngestionLogs,
+  prepareOcrQueue,
   processPendingDocuments,
   reprocessDocument,
   resetFailedDocuments,
+  runOcrForDocument,
   suggestDocumentMetadata,
   suggestMetadataBatch,
   syncDriveFolder,
@@ -38,6 +40,42 @@ export const processDocuments = asyncHandler(async (req, res) => {
   res.status(200).json({
     status: "success",
     message: "Document processing completed",
+    data: {
+      result
+    }
+  });
+});
+
+export const prepareOcrNeededDocuments = asyncHandler(async (req, res) => {
+  const result = await prepareOcrQueue({
+    userId: req.user._id
+  });
+
+  res.status(200).json({
+    status: "success",
+    message: "OCR queue preparation completed",
+    data: {
+      result
+    }
+  });
+});
+
+export const runOcrForSingleDocument = asyncHandler(async (req, res) => {
+  const result = await runOcrForDocument({
+    documentId: req.params.documentId,
+    userId: req.user._id
+  });
+
+  if (!result) {
+    return res.status(404).json({
+      status: "fail",
+      message: "Document not found"
+    });
+  }
+
+  res.status(200).json({
+    status: "success",
+    message: "OCR completed. New chunks were created and must be embedded.",
     data: {
       result
     }
@@ -86,12 +124,14 @@ export const listDocuments = asyncHandler(async (req, res) => {
   const limit = Number(req.query.limit || 20);
   const status = req.query.status || "";
   const metadataStatus = req.query.metadataStatus || "";
+  const ocrStatus = req.query.ocrStatus || "";
 
   const result = await getDocuments({
     page,
     limit,
     status,
-    metadataStatus
+    metadataStatus,
+    ocrStatus
   });
 
   res.status(200).json({

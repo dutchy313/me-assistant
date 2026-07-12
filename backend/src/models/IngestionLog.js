@@ -20,7 +20,13 @@ const ingestionLogSchema = new mongoose.Schema(
         "chunk_embedding_failed",
         "metadata_suggest_batch",
         "metadata_suggested",
-        "metadata_suggestion_failed"
+        "metadata_suggestion_failed",
+        "prepare_ocr_queue",
+        "ocr_needed_marked",
+        "ocr_not_required_marked",
+        "ocr_processing_started",
+        "ocr_completed",
+        "ocr_failed"
       ],
       required: true,
       index: true

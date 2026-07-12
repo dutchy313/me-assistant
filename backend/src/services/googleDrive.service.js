@@ -10,7 +10,7 @@ function getGooglePrivateKey() {
   return privateKey.replace(/\\n/g, "\n");
 }
 
-function createDriveClient() {
+function getGoogleDriveClient() {
   if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
     throw new Error("GOOGLE_SERVICE_ACCOUNT_EMAIL is missing");
   }
@@ -32,7 +32,7 @@ export async function listFilesInDriveFolder(folderId) {
     throw new Error("GOOGLE_DRIVE_FOLDER_ID is missing");
   }
 
-  const drive = createDriveClient();
+  const drive = getGoogleDriveClient();
 
   const files = [];
   let pageToken = null;
@@ -40,16 +40,13 @@ export async function listFilesInDriveFolder(folderId) {
   do {
     const response = await drive.files.list({
       q: `'${folderId}' in parents and trashed = false`,
-      fields:
-        "nextPageToken, files(id, name, mimeType, modifiedTime, size, webViewLink)",
+      fields: "nextPageToken, files(id, name, mimeType, modifiedTime, size)",
       pageSize: 100,
-      pageToken,
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true
+      pageToken
     });
 
     files.push(...(response.data.files || []));
-    pageToken = response.data.nextPageToken;
+    pageToken = response.data.nextPageToken || null;
   } while (pageToken);
 
   return files;
@@ -60,13 +57,12 @@ export async function downloadDriveFileAsBuffer(fileId) {
     throw new Error("Google Drive file ID is required");
   }
 
-  const drive = createDriveClient();
+  const drive = getGoogleDriveClient();
 
   const response = await drive.files.get(
     {
       fileId,
-      alt: "media",
-      supportsAllDrives: true
+      alt: "media"
     },
     {
       responseType: "arraybuffer"

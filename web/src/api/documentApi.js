@@ -4,14 +4,16 @@ export async function getAdminDocuments({
   page = 1,
   limit = 20,
   status = "",
-  metadataStatus = ""
+  metadataStatus = "",
+  ocrStatus = ""
 } = {}) {
   const response = await api.get("/admin/documents", {
     params: {
       page,
       limit,
       status,
-      metadataStatus
+      metadataStatus,
+      ocrStatus
     }
   });
 
@@ -50,6 +52,16 @@ export async function suggestMetadataBatch(limit = 3) {
 
 export async function reprocessDocument(documentId) {
   const response = await api.post(`/admin/documents/${documentId}/reprocess`);
+  return response.data;
+}
+
+export async function runOcrDocument(documentId) {
+  const response = await api.post(`/admin/documents/${documentId}/run-ocr`);
+  return response.data;
+}
+
+export async function prepareOcrQueue() {
+  const response = await api.post("/admin/documents/prepare-ocr-queue");
   return response.data;
 }
 

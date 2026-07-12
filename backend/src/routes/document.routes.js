@@ -4,9 +4,11 @@ import {
   getSingleDocument,
   listDocuments,
   listIngestionLogs,
+  prepareOcrNeededDocuments,
   processDocuments,
   reprocessSingleDocument,
   resetFailedDocumentProcessing,
+  runOcrForSingleDocument,
   suggestDocumentMetadataBatch,
   suggestSingleDocumentMetadata,
   syncDriveDocuments,
@@ -24,6 +26,7 @@ router.use(requireAdmin);
 router.post("/sync-drive", syncDriveDocuments);
 router.post("/process", processDocuments);
 router.post("/reset-failed", resetFailedDocumentProcessing);
+router.post("/prepare-ocr-queue", prepareOcrNeededDocuments);
 
 router.get("/", listDocuments);
 router.get("/logs", listIngestionLogs);
@@ -32,6 +35,7 @@ router.post("/suggest-metadata-batch", suggestDocumentMetadataBatch);
 
 router.get("/:documentId", getSingleDocument);
 
+router.post("/:documentId/run-ocr", runOcrForSingleDocument);
 router.post("/:documentId/reprocess", reprocessSingleDocument);
 router.post("/:documentId/suggest-metadata", suggestSingleDocumentMetadata);
 

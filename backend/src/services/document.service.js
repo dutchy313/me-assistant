@@ -6,6 +6,7 @@ import {
   downloadDriveFileAsBuffer,
   listFilesInDriveFolder
 } from "./googleDrive.service.js";
+import { extractTextFromPdfUsingDocumentAi } from "./documentAiOcr.service.js";
 import { extractTextFromPdfBuffer } from "./pdfExtraction.service.js";
 import { splitTextIntoChunks } from "./chunking.service.js";
 import {
@@ -97,12 +98,15 @@ export async function syncDriveFolder({ userId }) {
         const createdDocument = await Document.create({
           ...mappedDocument,
           canonicalTitle: "",
+          author: "",
           authors: [],
           publicationYear: null,
           publisher: "",
           citationLabel: "",
           metadataStatus: "auto",
           metadataNotes: "",
+          ocrStatus: "not_required",
+          ocrReason: "",
           status: "pending"
         });
 
@@ -137,6 +141,10 @@ export async function syncDriveFolder({ userId }) {
           existingDocument.metadataStatus = "auto";
         }
 
+        if (!existingDocument.ocrStatus) {
+          existingDocument.ocrStatus = "not_required";
+        }
+
         await existingDocument.save();
 
         results.skipped += 1;
@@ -166,6 +174,14 @@ export async function syncDriveFolder({ userId }) {
       existingDocument.totalChunks = 0;
       existingDocument.totalTokens = 0;
       existingDocument.indexedAt = null;
+      existingDocument.ocrStatus = "not_required";
+      existingDocument.ocrReason = "";
+      existingDocument.ocrPreparedAt = null;
+      existingDocument.ocrProcessedAt = null;
+      existingDocument.ocrProvider = "";
+      existingDocument.ocrPageCount = 0;
+      existingDocument.ocrTextLength = 0;
+      existingDocument.ocrErrorMessage = "";
 
       if (!existingDocument.metadataStatus) {
         existingDocument.metadataStatus = "auto";
@@ -255,6 +271,12 @@ export async function processPendingDocuments({ userId, limit = 3 }) {
       document.status = "failed";
       document.errorMessage = error.message;
 
+      if (isLikelyOcrNeededError(error.message)) {
+        document.ocrStatus = "needed";
+        document.ocrReason = "PDF text extraction failed or produced too little usable text.";
+        document.ocrPreparedAt = new Date();
+      }
+
       if (!document.metadataStatus) {
         document.metadataStatus = "auto";
       }
@@ -271,7 +293,8 @@ export async function processPendingDocuments({ userId, limit = 3 }) {
         driveFileId: document.driveFileId,
         createdBy: userId,
         metadata: {
-          error: error.message
+          error: error.message,
+          ocrStatus: document.ocrStatus
         }
       });
     }
@@ -286,6 +309,356 @@ export async function processPendingDocuments({ userId, limit = 3 }) {
   });
 
   return results;
+}
+
+export async function prepareOcrQueue({ userId }) {
+  const documents = await Document.find({
+    isActive: true,
+    fileType: "pdf",
+    $or: [
+      { status: "failed" },
+      { totalChunks: 0 },
+      { errorMessage: /scanned PDF/i },
+      { errorMessage: /No usable text/i },
+      { errorMessage: /no chunks/i }
+    ]
+  }).sort({ createdAt: 1 });
+
+  const results = {
+    totalChecked: documents.length,
+    markedNeeded: 0,
+    markedNotRequired: 0,
+    alreadyPrepared: 0,
+    skipped: 0,
+    items: []
+  };
+
+  await IngestionLog.create({
+    action: "prepare_ocr_queue",
+    status: "info",
+    message: `Started OCR queue preparation. Checking ${documents.length} document(s).`,
+    createdBy: userId,
+    metadata: {
+      totalChecked: documents.length
+    }
+  });
+
+  for (const document of documents) {
+    try {
+      const needsOcr = isDocumentLikelyOcrNeeded(document);
+
+      if (needsOcr) {
+        if (["needed", "queued", "processing"].includes(document.ocrStatus)) {
+          results.alreadyPrepared += 1;
+        } else {
+          results.markedNeeded += 1;
+        }
+
+        document.ocrStatus = "needed";
+        document.ocrReason = getOcrReason(document);
+        document.ocrPreparedAt = new Date();
+        document.ocrErrorMessage = "";
+
+        await document.save();
+
+        results.items.push({
+          documentId: document._id,
+          fileName: document.fileName,
+          status: document.status,
+          ocrStatus: document.ocrStatus,
+          reason: document.ocrReason
+        });
+
+        await IngestionLog.create({
+          action: "ocr_needed_marked",
+          status: "success",
+          message: `Marked ${document.fileName} as OCR needed.`,
+          documentId: document._id,
+          driveFileId: document.driveFileId,
+          createdBy: userId,
+          metadata: {
+            reason: document.ocrReason,
+            errorMessage: document.errorMessage
+          }
+        });
+
+        continue;
+      }
+
+      if (document.status === "indexed" && document.totalChunks > 0) {
+        document.ocrStatus = "not_required";
+        document.ocrReason = "Document already has extracted chunks.";
+        await document.save();
+
+        results.markedNotRequired += 1;
+
+        await IngestionLog.create({
+          action: "ocr_not_required_marked",
+          status: "success",
+          message: `Marked ${document.fileName} as OCR not required.`,
+          documentId: document._id,
+          driveFileId: document.driveFileId,
+          createdBy: userId,
+          metadata: {
+            totalChunks: document.totalChunks
+          }
+        });
+
+        continue;
+      }
+
+      results.skipped += 1;
+    } catch (error) {
+      results.skipped += 1;
+
+      await IngestionLog.create({
+        action: "prepare_ocr_queue",
+        status: "failed",
+        message: `Failed to prepare OCR status for ${document.fileName}: ${error.message}`,
+        documentId: document._id,
+        driveFileId: document.driveFileId,
+        createdBy: userId,
+        metadata: {
+          error: error.message
+        }
+      });
+    }
+  }
+
+  await IngestionLog.create({
+    action: "prepare_ocr_queue",
+    status: "success",
+    message: `Completed OCR queue preparation. Marked ${results.markedNeeded} as OCR needed, ${results.markedNotRequired} as not required, ${results.alreadyPrepared} already prepared, skipped ${results.skipped}.`,
+    createdBy: userId,
+    metadata: results
+  });
+
+  return results;
+}
+export async function runOcrForDocument({ documentId, userId }) {
+  const document = await Document.findById(documentId);
+
+  if (!document) {
+    return null;
+  }
+
+  if (!document.isActive) {
+    throw new Error("This document is disabled and cannot be OCR processed");
+  }
+
+  if (document.fileType !== "pdf") {
+    throw new Error("Only PDF documents can be OCR processed");
+  }
+
+  if (!["needed", "queued", "failed"].includes(document.ocrStatus)) {
+    throw new Error(
+      `This document is not ready for OCR. Current OCR status: ${
+        document.ocrStatus || "not_required"
+      }`
+    );
+  }
+
+  document.ocrStatus = "processing";
+  document.ocrErrorMessage = "";
+  document.status = "processing";
+  await document.save();
+
+  await IngestionLog.create({
+    action: "ocr_processing_started",
+    status: "info",
+    message: `Started OCR processing for ${document.fileName}`,
+    documentId: document._id,
+    driveFileId: document.driveFileId,
+    createdBy: userId,
+    metadata: {
+      provider: "google_document_ai"
+    }
+  });
+
+  try {
+    const pdfBuffer = await downloadDriveFileAsBuffer(document.driveFileId);
+
+    const ocrResult = await extractTextFromPdfUsingDocumentAi({
+      pdfBuffer
+    });
+
+    const cleanedText = normalizeOcrText(ocrResult.text);
+
+    if (!cleanedText || cleanedText.length < 100) {
+      throw new Error("OCR completed, but too little usable text was extracted");
+    }
+
+    const chunks = splitTextIntoChunks(cleanedText, {
+      chunkSize: 3000,
+      overlapSize: 350
+    });
+
+    if (chunks.length === 0) {
+      throw new Error("OCR text extraction succeeded, but no chunks were created");
+    }
+
+    const existingChunks = await SourceChunk.find({
+      documentId: document._id
+    }).select("_id vectorId");
+
+    const pointIds = existingChunks.map((chunk) => {
+      return chunk.vectorId || createQdrantPointId(chunk._id);
+    });
+
+    if (pointIds.length > 0) {
+      await deleteChunkVectors(pointIds);
+    }
+
+    await SourceChunk.deleteMany({
+      documentId: document._id
+    });
+
+    const chunkDocuments = chunks.map((chunk) => ({
+      documentId: document._id,
+      chunkIndex: chunk.chunkIndex,
+      text: chunk.text,
+      tokenCount: chunk.tokenCount,
+      pageStart: null,
+      pageEnd: null,
+      chapter: "",
+      sectionTitle: "",
+      vectorId: "",
+      embeddingStatus: "pending",
+      embeddingModel: "",
+      embeddingDimensions: 0,
+      embeddingError: "",
+      embeddedAt: null
+    }));
+
+    await SourceChunk.insertMany(chunkDocuments);
+
+    const totalTokens = chunks.reduce(
+      (sum, chunk) => sum + chunk.tokenCount,
+      0
+    );
+
+    document.status = "indexed";
+    document.errorMessage = "";
+    document.totalChunks = chunks.length;
+    document.totalTokens = totalTokens;
+    document.indexedAt = new Date();
+
+    document.ocrStatus = "completed";
+    document.ocrReason = "OCR completed successfully.";
+    document.ocrProcessedAt = new Date();
+    document.ocrProvider = ocrResult.provider || "google_drive_ocr";
+    document.ocrTextLength = cleanedText.length;
+    document.ocrErrorMessage = "";
+
+    if (!document.metadataStatus) {
+      document.metadataStatus = "auto";
+    }
+
+    await document.save();
+
+    const result = {
+      provider: document.ocrProvider,
+      totalChunks: chunks.length,
+      totalTokens,
+      ocrTextLength: cleanedText.length,
+      pendingEmbeddings: chunks.length,
+      deletedOldVectors: pointIds.length
+    };
+
+    await IngestionLog.create({
+      action: "ocr_completed",
+      status: "success",
+      message: `OCR completed for ${document.fileName}. Created ${chunks.length} chunk(s).`,
+      documentId: document._id,
+      driveFileId: document.driveFileId,
+      createdBy: userId,
+      metadata: result
+    });
+
+    return {
+      document,
+      ...result
+    };
+  } catch (error) {
+    document.status = "failed";
+    document.errorMessage = error.message;
+    document.ocrStatus = "failed";
+    document.ocrErrorMessage = error.message;
+    document.ocrProcessedAt = new Date();
+
+    await document.save();
+
+    await IngestionLog.create({
+      action: "ocr_failed",
+      status: "failed",
+      message: `OCR failed for ${document.fileName}: ${error.message}`,
+      documentId: document._id,
+      driveFileId: document.driveFileId,
+      createdBy: userId,
+      metadata: {
+        error: error.message,
+        provider: "google_drive_ocr"
+      }
+    });
+
+    throw error;
+  }
+}
+
+function normalizeOcrText(text = "") {
+  return text
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\u0000/g, "")
+    .replace(/\u000c/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ ?\n ?/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/ +([.,;:?!])/g, "$1")
+    .trim();
+}
+function isDocumentLikelyOcrNeeded(document) {
+  if (!document) {
+    return false;
+  }
+
+  if (document.status === "indexed" && document.totalChunks > 0) {
+    return false;
+  }
+
+  if (document.status === "failed" && isLikelyOcrNeededError(document.errorMessage)) {
+    return true;
+  }
+
+  if (document.fileType === "pdf" && document.totalChunks === 0 && document.status === "failed") {
+    return true;
+  }
+
+  return false;
+}
+
+function isLikelyOcrNeededError(message = "") {
+  const lowerMessage = String(message).toLowerCase();
+
+  return (
+    lowerMessage.includes("scanned pdf") ||
+    lowerMessage.includes("no usable text") ||
+    lowerMessage.includes("too little usable text") ||
+    lowerMessage.includes("no chunks") ||
+    lowerMessage.includes("text extraction succeeded, but no chunks")
+  );
+}
+
+function getOcrReason(document) {
+  if (document.errorMessage) {
+    return document.errorMessage;
+  }
+
+  if (document.totalChunks === 0) {
+    return "PDF has no extracted chunks.";
+  }
+
+  return "Document likely requires OCR before indexing.";
 }
 
 export async function reprocessDocument({ documentId, userId }) {
@@ -339,6 +712,13 @@ export async function reprocessDocument({ documentId, userId }) {
   } catch (error) {
     document.status = "failed";
     document.errorMessage = error.message;
+
+    if (isLikelyOcrNeededError(error.message)) {
+      document.ocrStatus = "needed";
+      document.ocrReason = "PDF text extraction failed or produced too little usable text.";
+      document.ocrPreparedAt = new Date();
+    }
+
     await document.save();
 
     await IngestionLog.create({
@@ -350,7 +730,8 @@ export async function reprocessDocument({ documentId, userId }) {
       createdBy: userId,
       metadata: {
         mode: "selected_reprocess",
-        error: error.message
+        error: error.message,
+        ocrStatus: document.ocrStatus
       }
     });
 
@@ -443,6 +824,9 @@ async function processSinglePdfDocument({ document, userId, mode }) {
   document.totalTokens = totalTokens;
   document.errorMessage = "";
   document.indexedAt = new Date();
+  document.ocrStatus = "not_required";
+  document.ocrReason = "Text extraction succeeded without OCR.";
+  document.ocrErrorMessage = "";
 
   if (!document.metadataStatus) {
     document.metadataStatus = "auto";
@@ -481,7 +865,8 @@ export async function getDocuments({
   page = 1,
   limit = 20,
   status,
-  metadataStatus
+  metadataStatus,
+  ocrStatus
 }) {
   const query = {};
 
@@ -502,6 +887,22 @@ export async function getDocuments({
     }
   }
 
+  if (ocrStatus) {
+    if (ocrStatus === "not_required") {
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { ocrStatus: "not_required" },
+          { ocrStatus: { $exists: false } },
+          { ocrStatus: null },
+          { ocrStatus: "" }
+        ]
+      });
+    } else {
+      query.ocrStatus = ocrStatus;
+    }
+  }
+
   const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
 
   const total = await Document.countDocuments(query);
@@ -511,7 +912,7 @@ export async function getDocuments({
   const safePage = Math.min(requestedPage, totalPages);
   const skip = (safePage - 1) * safeLimit;
 
-  const [documents, statusCounts, metadataCounts] = await Promise.all([
+  const [documents, statusCounts, metadataCounts, ocrCounts] = await Promise.all([
     Document.find(query).sort({ createdAt: -1 }).skip(skip).limit(safeLimit),
     Document.aggregate([
       {
@@ -528,6 +929,14 @@ export async function getDocuments({
           count: { $sum: 1 }
         }
       }
+    ]),
+    Document.aggregate([
+      {
+        $group: {
+          _id: "$ocrStatus",
+          count: { $sum: 1 }
+        }
+      }
     ])
   ]);
 
@@ -540,7 +949,14 @@ export async function getDocuments({
     disabled: 0,
     metadataAuto: 0,
     metadataNeedsReview: 0,
-    metadataReviewed: 0
+    metadataReviewed: 0,
+    ocrNotRequired: 0,
+    ocrNeeded: 0,
+    ocrQueued: 0,
+    ocrProcessing: 0,
+    ocrCompleted: 0,
+    ocrFailed: 0,
+    ocrSkipped: 0
   };
 
   for (const item of statusCounts) {
@@ -562,12 +978,43 @@ export async function getDocuments({
     }
   }
 
+  for (const item of ocrCounts) {
+    if (item._id === "not_required" || !item._id) {
+      counts.ocrNotRequired += item.count;
+    }
+
+    if (item._id === "needed") {
+      counts.ocrNeeded += item.count;
+    }
+
+    if (item._id === "queued") {
+      counts.ocrQueued += item.count;
+    }
+
+    if (item._id === "processing") {
+      counts.ocrProcessing += item.count;
+    }
+
+    if (item._id === "completed") {
+      counts.ocrCompleted += item.count;
+    }
+
+    if (item._id === "failed") {
+      counts.ocrFailed += item.count;
+    }
+
+    if (item._id === "skipped") {
+      counts.ocrSkipped += item.count;
+    }
+  }
+
   return {
     documents,
     counts,
     filters: {
       status: status || "",
-      metadataStatus: metadataStatus || ""
+      metadataStatus: metadataStatus || "",
+      ocrStatus: ocrStatus || ""
     },
     pagination: {
       page: safePage,

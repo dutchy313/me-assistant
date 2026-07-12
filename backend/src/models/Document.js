@@ -14,12 +14,16 @@ const documentSchema = new mongoose.Schema(
       default: ""
     },
 
-    authors: [
-      {
-        type: String,
-        trim: true
-      }
-    ],
+    author: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    authors: {
+      type: [String],
+      default: []
+    },
 
     publicationYear: {
       type: Number,
@@ -51,12 +55,6 @@ const documentSchema = new mongoose.Schema(
       default: ""
     },
 
-    author: {
-      type: String,
-      trim: true,
-      default: ""
-    },
-
     fileName: {
       type: String,
       required: true,
@@ -65,20 +63,25 @@ const documentSchema = new mongoose.Schema(
 
     fileType: {
       type: String,
+      required: true,
       trim: true,
-      default: ""
+      lowercase: true,
+      index: true
     },
 
     sourceType: {
       type: String,
       enum: ["book", "manual", "guide", "report", "web", "other"],
-      default: "book"
+      default: "book",
+      index: true
     },
 
     driveFileId: {
       type: String,
       required: true,
-      unique: true
+      unique: true,
+      index: true,
+      trim: true
     },
 
     driveMimeType: {
@@ -130,9 +133,63 @@ const documentSchema = new mongoose.Schema(
       default: null
     },
 
+    ocrStatus: {
+      type: String,
+      enum: [
+        "not_required",
+        "needed",
+        "queued",
+        "processing",
+        "completed",
+        "failed",
+        "skipped"
+      ],
+      default: "not_required",
+      index: true
+    },
+
+    ocrReason: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    ocrPreparedAt: {
+      type: Date,
+      default: null
+    },
+
+    ocrProcessedAt: {
+      type: Date,
+      default: null
+    },
+
+    ocrProvider: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    ocrPageCount: {
+      type: Number,
+      default: 0
+    },
+
+    ocrTextLength: {
+      type: Number,
+      default: 0
+    },
+
+    ocrErrorMessage: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
     isActive: {
       type: Boolean,
-      default: true
+      default: true,
+      index: true
     }
   },
   {

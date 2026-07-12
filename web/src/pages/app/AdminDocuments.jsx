@@ -6,11 +6,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Edit3,
+  Eye,
   FileText,
   Loader2,
   PlayCircle,
   RefreshCw,
   RotateCcw,
+  ScanText,
   Sparkles,
   X
 } from "lucide-react";
@@ -18,9 +20,11 @@ import {
   disableDocument,
   getAdminDocuments,
   getIngestionLogs,
+  prepareOcrQueue,
   processPendingDocuments,
   reprocessDocument,
   resetFailedDocuments,
+  runOcrDocument,
   suggestDocumentMetadata,
   suggestMetadataBatch,
   syncGoogleDriveDocuments,
@@ -50,7 +54,14 @@ export default function AdminDocuments() {
     disabled: 0,
     metadataAuto: 0,
     metadataNeedsReview: 0,
-    metadataReviewed: 0
+    metadataReviewed: 0,
+    ocrNotRequired: 0,
+    ocrNeeded: 0,
+    ocrQueued: 0,
+    ocrProcessing: 0,
+    ocrCompleted: 0,
+    ocrFailed: 0,
+    ocrSkipped: 0
   });
   const [logs, setLogs] = useState([]);
 
@@ -58,6 +69,7 @@ export default function AdminDocuments() {
   const [pageLimit, setPageLimit] = useState(20);
   const [documentStatusFilter, setDocumentStatusFilter] = useState("");
   const [metadataStatusFilter, setMetadataStatusFilter] = useState("");
+  const [ocrStatusFilter, setOcrStatusFilter] = useState("");
 
   const [batchSize, setBatchSize] = useState(3);
   const [status, setStatus] = useState("loading");
@@ -70,6 +82,9 @@ export default function AdminDocuments() {
   const [bulkSuggestSize, setBulkSuggestSize] = useState(3);
   const [reprocessStatus, setReprocessStatus] = useState("idle");
   const [reprocessingDocumentId, setReprocessingDocumentId] = useState("");
+  const [ocrPrepStatus, setOcrPrepStatus] = useState("idle");
+  const [ocrRunStatus, setOcrRunStatus] = useState("idle");
+  const [ocrRunningDocumentId, setOcrRunningDocumentId] = useState("");
   const [message, setMessage] = useState("");
 
   const [editingDocument, setEditingDocument] = useState(null);
@@ -86,13 +101,15 @@ export default function AdminDocuments() {
         options.documentStatusFilter ?? documentStatusFilter;
       const nextMetadataStatus =
         options.metadataStatusFilter ?? metadataStatusFilter;
+      const nextOcrStatus = options.ocrStatusFilter ?? ocrStatusFilter;
 
       const [documentsResponse, logsResponse] = await Promise.all([
         getAdminDocuments({
           page: nextPage,
           limit: nextLimit,
           status: nextDocumentStatus,
-          metadataStatus: nextMetadataStatus
+          metadataStatus: nextMetadataStatus,
+          ocrStatus: nextOcrStatus
         }),
         getIngestionLogs()
       ]);
@@ -109,7 +126,14 @@ export default function AdminDocuments() {
           disabled: 0,
           metadataAuto: 0,
           metadataNeedsReview: 0,
-          metadataReviewed: 0
+          metadataReviewed: 0,
+          ocrNotRequired: 0,
+          ocrNeeded: 0,
+          ocrQueued: 0,
+          ocrProcessing: 0,
+          ocrCompleted: 0,
+          ocrFailed: 0,
+          ocrSkipped: 0
         }
       );
 
@@ -186,6 +210,70 @@ export default function AdminDocuments() {
     } catch (error) {
       setResetStatus("failed");
       setMessage(error.response?.data?.message || "Could not reset documents");
+    }
+  }
+
+  async function handlePrepareOcrQueue() {
+    const confirmed = window.confirm(
+      "Prepare the OCR queue? This will identify failed/scanned PDFs and mark them as OCR needed. It will not run OCR yet."
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setOcrPrepStatus("loading");
+      setMessage("");
+
+      const response = await prepareOcrQueue();
+      const result = response.data.result;
+
+      setMessage(
+        `OCR queue prepared. Checked ${result.totalChecked}, marked ${result.markedNeeded} as OCR needed, already prepared ${result.alreadyPrepared}, skipped ${result.skipped}.`
+      );
+
+      setOcrPrepStatus("succeeded");
+      setOcrStatusFilter("needed");
+      setPage(1);
+
+      await loadData({
+        page: 1,
+        ocrStatusFilter: "needed"
+      });
+    } catch (error) {
+      setOcrPrepStatus("failed");
+      setMessage(
+        error.response?.data?.message || "Could not prepare OCR queue"
+      );
+    }
+  }
+
+  async function handleRunOcr(document) {
+    const confirmed = window.confirm(
+      `Run OCR for this document?\n\n${document.fileName}\n\nThis will send the PDF to Google Document AI, extract text, create chunks, and mark the chunks as pending embeddings. After OCR, go to Vector Index and embed the pending chunks.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setOcrRunStatus("loading");
+      setOcrRunningDocumentId(document._id);
+      setMessage("");
+
+      const response = await runOcrDocument(document._id);
+      const result = response.data.result;
+
+      setMessage(
+        `OCR completed for "${document.fileName}". Created ${result.totalChunks} chunks. Go to Vector Index and embed ${result.pendingEmbeddings} pending chunks.`
+      );
+
+      setOcrRunStatus("succeeded");
+      setOcrRunningDocumentId("");
+
+      await loadData();
+    } catch (error) {
+      setOcrRunStatus("failed");
+      setOcrRunningDocumentId("");
+      setMessage(error.response?.data?.message || "Could not run OCR");
     }
   }
 
@@ -427,14 +515,22 @@ export default function AdminDocuments() {
     await loadData({ page: 1, metadataStatusFilter: value });
   }
 
+  async function handleOcrStatusFilterChange(value) {
+    setOcrStatusFilter(value);
+    setPage(1);
+    await loadData({ page: 1, ocrStatusFilter: value });
+  }
+
   async function clearFilters() {
     setDocumentStatusFilter("");
     setMetadataStatusFilter("");
+    setOcrStatusFilter("");
     setPage(1);
     await loadData({
       page: 1,
       documentStatusFilter: "",
-      metadataStatusFilter: ""
+      metadataStatusFilter: "",
+      ocrStatusFilter: ""
     });
   }
 
@@ -443,7 +539,9 @@ export default function AdminDocuments() {
     processStatus === "loading" ||
     resetStatus === "loading" ||
     bulkSuggestStatus === "loading" ||
-    reprocessStatus === "loading";
+    reprocessStatus === "loading" ||
+    ocrPrepStatus === "loading" ||
+    ocrRunStatus === "loading";
 
   const indexedPercent =
     counts.total === 0 ? 0 : Math.round((counts.indexed / counts.total) * 100);
@@ -452,7 +550,7 @@ export default function AdminDocuments() {
     <div className="space-y-6">
       <section className="rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-8 shadow-xl shadow-[var(--brand-blue)]/10">
         <div className="mb-5 inline-flex rounded-full border border-[var(--brand-sky-border)] bg-[var(--brand-sky-soft)] px-4 py-2 text-sm font-semibold text-[var(--brand-blue)]">
-          Safe batch processing + metadata review
+          Safe batch processing + OCR preparation
         </div>
 
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
@@ -462,8 +560,9 @@ export default function AdminDocuments() {
             </h1>
 
             <p className="mt-3 max-w-3xl leading-7 text-[var(--app-muted)]">
-              Process PDFs, review failed documents, reprocess selected sources
-              with improved cleanup, and correct citation metadata.
+              Process PDFs, review failed documents, run OCR for scanned PDFs,
+              reprocess selected sources with improved cleanup, and correct
+              citation metadata.
             </p>
           </div>
 
@@ -488,6 +587,21 @@ export default function AdminDocuments() {
               >
                 <RotateCcw size={16} />
                 Reset failed
+              </button>
+
+              <button
+                onClick={handlePrepareOcrQueue}
+                disabled={busy}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--brand-sky-border)] bg-[var(--brand-sky-soft)] px-5 py-3 text-sm font-semibold text-[var(--brand-blue)] transition hover:bg-[var(--app-surface)] disabled:opacity-60"
+              >
+                {ocrPrepStatus === "loading" ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <ScanText size={16} />
+                )}
+                {ocrPrepStatus === "loading"
+                  ? "Preparing OCR..."
+                  : "Prepare OCR queue"}
               </button>
             </div>
 
@@ -588,11 +702,6 @@ export default function AdminDocuments() {
           label="Pending"
           value={counts.pending}
         />
-        <MetricCard
-          icon={<RefreshCw />}
-          label="Processing"
-          value={counts.processing}
-        />
         <MetricCard icon={<FileText />} label="Indexed" value={counts.indexed} />
         <MetricCard
           icon={<AlertTriangle />}
@@ -600,9 +709,14 @@ export default function AdminDocuments() {
           value={counts.failed}
         />
         <MetricCard
-          icon={<Edit3 />}
-          label="Auto metadata"
-          value={counts.metadataAuto}
+          icon={<ScanText />}
+          label="OCR needed"
+          value={counts.ocrNeeded}
+        />
+        <MetricCard
+          icon={<ScanText />}
+          label="OCR completed"
+          value={counts.ocrCompleted}
         />
         <MetricCard
           icon={<Edit3 />}
@@ -628,7 +742,7 @@ export default function AdminDocuments() {
             </p>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-5">
             <label>
               <span className="mb-1 block text-xs font-semibold text-[var(--app-muted)]">
                 Document status
@@ -671,6 +785,29 @@ export default function AdminDocuments() {
 
             <label>
               <span className="mb-1 block text-xs font-semibold text-[var(--app-muted)]">
+                OCR status
+              </span>
+
+              <select
+                value={ocrStatusFilter}
+                onChange={(event) =>
+                  handleOcrStatusFilterChange(event.target.value)
+                }
+                className="w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2 text-sm text-[var(--app-text)] outline-none"
+              >
+                <option value="">All</option>
+                <option value="not_required">Not required</option>
+                <option value="needed">Needed</option>
+                <option value="queued">Queued</option>
+                <option value="processing">Processing</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+                <option value="skipped">Skipped</option>
+              </select>
+            </label>
+
+            <label>
+              <span className="mb-1 block text-xs font-semibold text-[var(--app-muted)]">
                 Rows
               </span>
 
@@ -705,13 +842,14 @@ export default function AdminDocuments() {
           </p>
         ) : (
           <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[1450px] text-left text-sm">
+            <table className="w-full min-w-[1550px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--app-border)] text-[var(--app-muted)]">
                   <th className="py-3 pr-4">Title</th>
                   <th className="py-3 pr-4">Citation</th>
                   <th className="py-3 pr-4">Type</th>
                   <th className="py-3 pr-4">Metadata</th>
+                  <th className="py-3 pr-4">OCR</th>
                   <th className="py-3 pr-4">Status</th>
                   <th className="py-3 pr-4">Chunks</th>
                   <th className="py-3 pr-4">Size</th>
@@ -723,6 +861,8 @@ export default function AdminDocuments() {
                 {documents.map((document) => {
                   const isThisDocumentReprocessing =
                     reprocessingDocumentId === document._id;
+                  const isThisDocumentRunningOcr =
+                    ocrRunningDocumentId === document._id;
 
                   return (
                     <tr
@@ -817,6 +957,38 @@ export default function AdminDocuments() {
                       </td>
 
                       <td className="py-4 pr-4">
+                        <div className="max-w-[220px]">
+                          <span className="inline-flex rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--app-text)]">
+                            {formatOcrStatus(document.ocrStatus)}
+                          </span>
+
+                          {document.ocrProvider && (
+                            <p className="mt-1 text-xs text-[var(--app-muted)]">
+                              Provider: {document.ocrProvider}
+                            </p>
+                          )}
+
+                          {document.ocrTextLength > 0 && (
+                            <p className="mt-1 text-xs text-[var(--app-muted)]">
+                              Text: {document.ocrTextLength.toLocaleString()} chars
+                            </p>
+                          )}
+
+                          {document.ocrReason && (
+                            <p className="mt-2 line-clamp-3 text-xs leading-5 text-[var(--app-muted)]">
+                              {document.ocrReason}
+                            </p>
+                          )}
+
+                          {document.ocrErrorMessage && (
+                            <p className="mt-2 line-clamp-3 text-xs leading-5 text-red-600">
+                              {document.ocrErrorMessage}
+                            </p>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="py-4 pr-4">
                         <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--app-text)]">
                           {document.status}
                         </span>
@@ -840,6 +1012,37 @@ export default function AdminDocuments() {
                             Metadata
                           </button>
 
+                          {["needed", "queued", "failed"].includes(
+                            document.ocrStatus
+                          ) && (
+                            <button
+                              onClick={() => handleRunOcr(document)}
+                              disabled={
+                                busy ||
+                                document.status === "processing" ||
+                                document.status === "disabled" ||
+                                document.fileType !== "pdf"
+                              }
+                              className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                            >
+                              {isThisDocumentRunningOcr ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <ScanText size={14} />
+                              )}
+                              {isThisDocumentRunningOcr
+                                ? "Running OCR..."
+                                : "Run OCR"}
+                            </button>
+                          )}
+
+                          {document.ocrStatus === "completed" && (
+                            <span className="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                              <CheckCircle2 size={14} />
+                              OCR complete
+                            </span>
+                          )}
+
                           <button
                             onClick={() => handleReprocess(document)}
                             disabled={
@@ -859,6 +1062,13 @@ export default function AdminDocuments() {
                               ? "Reprocessing..."
                               : "Reprocess"}
                           </button>
+
+                          {document.ocrStatus === "needed" && (
+                            <span className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                              <Eye size={14} />
+                              Ready for OCR
+                            </span>
+                          )}
 
                           {document.status !== "disabled" ? (
                             <button
@@ -1283,6 +1493,17 @@ function formatMetadataStatus(status = "auto") {
   }
 
   return "Auto";
+}
+
+function formatOcrStatus(status = "not_required") {
+  if (status === "needed") return "Needed";
+  if (status === "queued") return "Queued";
+  if (status === "processing") return "Processing";
+  if (status === "completed") return "Completed";
+  if (status === "failed") return "Failed";
+  if (status === "skipped") return "Skipped";
+
+  return "Not required";
 }
 
 function formatFileSize(size = 0) {
