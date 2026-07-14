@@ -81,21 +81,61 @@ export async function listEvaluationSnapshots({
   };
 }
 
-export async function listRagEvaluations({ page = 1, limit = 20 }) {
+export async function listRagEvaluations({
+  page = 1,
+  limit = 20,
+  reviewStatus = "",
+  recommendedAction = "",
+  reviewDecision = "",
+  maxOverallScore = "",
+  minOverallScore = ""
+}) {
+  const query = {};
+
+  if (reviewStatus) {
+    query.reviewStatus = reviewStatus;
+  }
+
+  if (recommendedAction) {
+    query.recommendedAction = recommendedAction;
+  }
+
+  if (reviewDecision) {
+    query.reviewDecision = reviewDecision;
+  }
+
+  const scoreQuery = {};
+
+  if (maxOverallScore !== "") {
+    scoreQuery.$lte = Number(maxOverallScore);
+  }
+
+  if (minOverallScore !== "") {
+    scoreQuery.$gte = Number(minOverallScore);
+  }
+
+  if (Object.keys(scoreQuery).length > 0) {
+    query.overallScore = scoreQuery;
+  }
+
   const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
   const requestedPage = Math.max(Number(page) || 1, 1);
 
-  const total = await RagEvaluation.countDocuments();
+  const total = await RagEvaluation.countDocuments(query);
   const totalPages = Math.max(Math.ceil(total / safeLimit), 1);
   const safePage = Math.min(requestedPage, totalPages);
   const skip = (safePage - 1) * safeLimit;
 
-  const evaluations = await RagEvaluation.find()
+  const evaluations = await RagEvaluation.find(query)
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(safeLimit)
     .populate("userId", "name email role")
-    .populate("snapshotId", "originalQuestion rewrittenQuestion answer createdAt");
+    .populate("reviewedBy", "name email role")
+    .populate(
+      "snapshotId",
+      "originalQuestion rewrittenQuestion answer selectedContextText citations retrievalConfig createdAt"
+    );
 
   return {
     evaluations,
@@ -110,12 +150,49 @@ export async function listRagEvaluations({ page = 1, limit = 20 }) {
   };
 }
 
+export async function getSingleRagEvaluation({ evaluationId }) {
+  return RagEvaluation.findById(evaluationId)
+    .populate("userId", "name email role")
+    .populate("reviewedBy", "name email role")
+    .populate(
+      "snapshotId",
+      "originalQuestion rewrittenQuestion answer selectedContextText retrievedChunks citations retrievalConfig createdAt"
+    );
+}
+
+export async function markRagEvaluationReviewed({
+  evaluationId,
+  adminUserId,
+  reviewDecision,
+  reviewNote
+}) {
+  const evaluation = await RagEvaluation.findById(evaluationId);
+
+  if (!evaluation) {
+    return null;
+  }
+
+  evaluation.reviewStatus = "reviewed";
+  evaluation.reviewedBy = adminUserId;
+  evaluation.reviewedAt = new Date();
+  evaluation.reviewDecision = reviewDecision || "accepted";
+  evaluation.reviewNote = reviewNote || "";
+
+  await evaluation.save();
+
+  return getSingleRagEvaluation({
+    evaluationId: evaluation._id
+  });
+}
+
 export async function getRagEvaluationSummary() {
   const [
     totalEvaluations,
     averageScores,
     labelCounts,
     actionCounts,
+    reviewCounts,
+    decisionCounts,
     recentLowScores
   ] = await Promise.all([
     RagEvaluation.countDocuments(),
@@ -152,6 +229,24 @@ export async function getRagEvaluationSummary() {
       }
     ]),
 
+    RagEvaluation.aggregate([
+      {
+        $group: {
+          _id: "$reviewStatus",
+          count: { $sum: 1 }
+        }
+      }
+    ]),
+
+    RagEvaluation.aggregate([
+      {
+        $group: {
+          _id: "$reviewDecision",
+          count: { $sum: 1 }
+        }
+      }
+    ]),
+
     RagEvaluation.find({
       overallScore: { $lte: 3 }
     })
@@ -165,6 +260,8 @@ export async function getRagEvaluationSummary() {
     averages: normalizeAverageScores(averageScores[0]),
     labels: normalizeCounts(labelCounts),
     actions: normalizeCounts(actionCounts),
+    reviews: normalizeCounts(reviewCounts),
+    decisions: normalizeCounts(decisionCounts),
     recentLowScores
   };
 }
@@ -276,6 +373,10 @@ export async function evaluateRagSnapshot({ snapshotId, userId }) {
       strengths: normalized.strengths,
       weaknesses: normalized.weaknesses,
       recommendedAction: normalized.recommendedAction,
+
+      reviewStatus: "unreviewed",
+      reviewDecision: "not_decided",
+
       rawEvaluatorOutput: evaluatorResult
     });
 

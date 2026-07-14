@@ -21,14 +21,32 @@ export async function getEvaluationSnapshots({
   return response.data;
 }
 
-export async function getRagEvaluations({ page = 1, limit = 20 } = {}) {
+export async function getRagEvaluations({
+  page = 1,
+  limit = 20,
+  reviewStatus = "",
+  recommendedAction = "",
+  reviewDecision = "",
+  minOverallScore = "",
+  maxOverallScore = ""
+} = {}) {
   const response = await api.get("/admin/evaluations", {
     params: {
       page,
-      limit
+      limit,
+      reviewStatus,
+      recommendedAction,
+      reviewDecision,
+      minOverallScore,
+      maxOverallScore
     }
   });
 
+  return response.data;
+}
+
+export async function getRagEvaluation(evaluationId) {
+  const response = await api.get(`/admin/evaluations/${evaluationId}`);
   return response.data;
 }
 
@@ -43,6 +61,19 @@ export async function evaluateSnapshot(snapshotId) {
 export async function evaluateSnapshotsBatch(limit = 3) {
   const response = await api.post("/admin/evaluations/snapshots/evaluate-batch", {
     limit
+  });
+
+  return response.data;
+}
+
+export async function reviewRagEvaluation({
+  evaluationId,
+  reviewDecision,
+  reviewNote
+}) {
+  const response = await api.patch(`/admin/evaluations/${evaluationId}/review`, {
+    reviewDecision,
+    reviewNote
   });
 
   return response.data;

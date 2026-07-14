@@ -2,15 +2,20 @@ import express from "express";
 import {
   evaluateSnapshot,
   evaluateSnapshotsBatch,
+  getEvaluation,
   getEvaluationSnapshots,
   getEvaluationSummary,
-  getEvaluations
+  getEvaluations,
+  reviewEvaluation
 } from "../controllers/ragEvaluation.controller.js";
 import { requireAdmin, requireAuth } from "../middlewares/auth.middleware.js";
 import { evaluationRateLimiter } from "../middlewares/productionRateLimit.middleware.js";
 import { enforceDailyEvaluationLimit } from "../middlewares/dailyUsageLimit.middleware.js";
 import { validateBody } from "../middlewares/requestValidation.middleware.js";
-import { evaluateSnapshotsBatchSchema } from "../validations/ragEvaluation.validation.js";
+import {
+  evaluateSnapshotsBatchSchema,
+  reviewEvaluationSchema
+} from "../validations/ragEvaluation.validation.js";
 
 const router = express.Router();
 
@@ -36,5 +41,12 @@ router.post(
 );
 
 router.get("/", getEvaluations);
+router.get("/:evaluationId", getEvaluation);
+
+router.patch(
+  "/:evaluationId/review",
+  validateBody(reviewEvaluationSchema),
+  reviewEvaluation
+);
 
 export default router;

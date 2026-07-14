@@ -4,8 +4,10 @@ import {
   evaluatePendingRagSnapshots,
   evaluateRagSnapshot,
   getRagEvaluationSummary,
+  getSingleRagEvaluation,
   listEvaluationSnapshots,
-  listRagEvaluations
+  listRagEvaluations,
+  markRagEvaluationReviewed
 } from "../services/ragEvaluation.service.js";
 
 export const getEvaluationSnapshots = asyncHandler(async (req, res) => {
@@ -24,12 +26,37 @@ export const getEvaluationSnapshots = asyncHandler(async (req, res) => {
 export const getEvaluations = asyncHandler(async (req, res) => {
   const result = await listRagEvaluations({
     page: Number(req.query.page || 1),
-    limit: Number(req.query.limit || 20)
+    limit: Number(req.query.limit || 20),
+    reviewStatus: req.query.reviewStatus || "",
+    recommendedAction: req.query.recommendedAction || "",
+    reviewDecision: req.query.reviewDecision || "",
+    maxOverallScore: req.query.maxOverallScore || "",
+    minOverallScore: req.query.minOverallScore || ""
   });
 
   res.status(200).json({
     status: "success",
     data: result
+  });
+});
+
+export const getEvaluation = asyncHandler(async (req, res) => {
+  const evaluation = await getSingleRagEvaluation({
+    evaluationId: req.params.evaluationId
+  });
+
+  if (!evaluation) {
+    return res.status(404).json({
+      status: "fail",
+      message: "RAG evaluation not found"
+    });
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      evaluation
+    }
   });
 });
 
@@ -81,6 +108,30 @@ export const evaluateSnapshotsBatch = asyncHandler(async (req, res) => {
     message: "Batch evaluation completed",
     data: {
       result
+    }
+  });
+});
+
+export const reviewEvaluation = asyncHandler(async (req, res) => {
+  const evaluation = await markRagEvaluationReviewed({
+    evaluationId: req.params.evaluationId,
+    adminUserId: req.user._id,
+    reviewDecision: req.body.reviewDecision,
+    reviewNote: req.body.reviewNote
+  });
+
+  if (!evaluation) {
+    return res.status(404).json({
+      status: "fail",
+      message: "RAG evaluation not found"
+    });
+  }
+
+  res.status(200).json({
+    status: "success",
+    message: "Evaluation review saved",
+    data: {
+      evaluation
     }
   });
 });

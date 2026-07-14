@@ -145,6 +145,46 @@ const ragEvaluationSchema = new mongoose.Schema(
       index: true
     },
 
+    reviewStatus: {
+      type: String,
+      enum: ["unreviewed", "reviewed"],
+      default: "unreviewed",
+      index: true
+    },
+
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true
+    },
+
+    reviewedAt: {
+      type: Date,
+      default: null,
+      index: true
+    },
+
+    reviewNote: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    reviewDecision: {
+      type: String,
+      enum: [
+        "not_decided",
+        "accepted",
+        "answer_needs_fix",
+        "retrieval_needs_fix",
+        "source_needs_fix",
+        "exclude_from_release"
+      ],
+      default: "not_decided",
+      index: true
+    },
+
     rawEvaluatorOutput: {
       type: mongoose.Schema.Types.Mixed,
       default: {}

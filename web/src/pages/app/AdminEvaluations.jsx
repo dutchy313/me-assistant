@@ -6,12 +6,14 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
+  Eye,
   Loader2,
   RefreshCw,
   SearchCheck,
   ShieldCheck,
   Target,
   ThumbsUp,
+  X,
   Zap
 } from "lucide-react";
 import {
@@ -19,7 +21,9 @@ import {
   evaluateSnapshotsBatch,
   getEvaluationSnapshots,
   getEvaluationSummary,
-  getRagEvaluations
+  getRagEvaluation,
+  getRagEvaluations,
+  reviewRagEvaluation
 } from "../../api/ragEvaluationApi";
 
 export default function AdminEvaluations() {
@@ -35,12 +39,23 @@ export default function AdminEvaluations() {
   const [evaluationStatusFilter, setEvaluationStatusFilter] =
     useState("not_evaluated");
 
+  const [reviewStatusFilter, setReviewStatusFilter] = useState("");
+  const [recommendedActionFilter, setRecommendedActionFilter] = useState("");
+  const [reviewDecisionFilter, setReviewDecisionFilter] = useState("");
+  const [maxOverallScoreFilter, setMaxOverallScoreFilter] = useState("");
+
   const [batchSize, setBatchSize] = useState(3);
   const [status, setStatus] = useState("loading");
   const [evaluateStatus, setEvaluateStatus] = useState("idle");
   const [batchEvaluateStatus, setBatchEvaluateStatus] = useState("idle");
+  const [reviewStatus, setReviewStatus] = useState("idle");
   const [evaluatingSnapshotId, setEvaluatingSnapshotId] = useState("");
   const [message, setMessage] = useState("");
+
+  const [selectedEvaluation, setSelectedEvaluation] = useState(null);
+  const [detailStatus, setDetailStatus] = useState("idle");
+  const [reviewDecision, setReviewDecision] = useState("accepted");
+  const [reviewNote, setReviewNote] = useState("");
 
   async function loadData(options = {}) {
     try {
@@ -52,6 +67,14 @@ export default function AdminEvaluations() {
       const nextEvaluationStatus =
         options.evaluationStatusFilter ?? evaluationStatusFilter;
 
+      const nextReviewStatus = options.reviewStatusFilter ?? reviewStatusFilter;
+      const nextRecommendedAction =
+        options.recommendedActionFilter ?? recommendedActionFilter;
+      const nextReviewDecision =
+        options.reviewDecisionFilter ?? reviewDecisionFilter;
+      const nextMaxOverallScore =
+        options.maxOverallScoreFilter ?? maxOverallScoreFilter;
+
       const [summaryResponse, snapshotsResponse, evaluationsResponse] =
         await Promise.all([
           getEvaluationSummary(),
@@ -62,7 +85,11 @@ export default function AdminEvaluations() {
           }),
           getRagEvaluations({
             page: nextEvaluationPage,
-            limit: nextLimit
+            limit: nextLimit,
+            reviewStatus: nextReviewStatus,
+            recommendedAction: nextRecommendedAction,
+            reviewDecision: nextReviewDecision,
+            maxOverallScore: nextMaxOverallScore
           })
         ]);
 
@@ -151,6 +178,62 @@ export default function AdminEvaluations() {
     }
   }
 
+  async function openEvaluationDetail(evaluationId) {
+    try {
+      setDetailStatus("loading");
+      setMessage("");
+
+      const response = await getRagEvaluation(evaluationId);
+      const evaluation = response.data.evaluation;
+
+      setSelectedEvaluation(evaluation);
+      setReviewDecision(
+        evaluation.reviewDecision && evaluation.reviewDecision !== "not_decided"
+          ? evaluation.reviewDecision
+          : suggestedReviewDecision(evaluation.recommendedAction)
+      );
+      setReviewNote(evaluation.reviewNote || "");
+
+      setDetailStatus("succeeded");
+    } catch (error) {
+      setDetailStatus("failed");
+      setMessage(error.response?.data?.message || "Could not load evaluation");
+    }
+  }
+
+  function closeEvaluationDetail() {
+    setSelectedEvaluation(null);
+    setReviewDecision("accepted");
+    setReviewNote("");
+    setDetailStatus("idle");
+  }
+
+  async function handleSaveReview() {
+    if (!selectedEvaluation) return;
+
+    try {
+      setReviewStatus("loading");
+      setMessage("");
+
+      await reviewRagEvaluation({
+        evaluationId: selectedEvaluation._id,
+        reviewDecision,
+        reviewNote
+      });
+
+      setReviewStatus("succeeded");
+
+      closeEvaluationDetail();
+
+      setMessage("Evaluation review saved.");
+
+      await loadData();
+    } catch (error) {
+      setReviewStatus("failed");
+      setMessage(error.response?.data?.message || "Could not save review");
+    }
+  }
+
   async function handleSnapshotStatusFilterChange(value) {
     setEvaluationStatusFilter(value);
     setSnapshotPage(1);
@@ -172,6 +255,31 @@ export default function AdminEvaluations() {
       snapshotPage: 1,
       evaluationPage: 1,
       limit: nextLimit
+    });
+  }
+
+  async function applyEvaluationFilters(nextFilters = {}) {
+    const nextReviewStatus =
+      nextFilters.reviewStatusFilter ?? reviewStatusFilter;
+    const nextRecommendedAction =
+      nextFilters.recommendedActionFilter ?? recommendedActionFilter;
+    const nextReviewDecision =
+      nextFilters.reviewDecisionFilter ?? reviewDecisionFilter;
+    const nextMaxOverallScore =
+      nextFilters.maxOverallScoreFilter ?? maxOverallScoreFilter;
+
+    setReviewStatusFilter(nextReviewStatus);
+    setRecommendedActionFilter(nextRecommendedAction);
+    setReviewDecisionFilter(nextReviewDecision);
+    setMaxOverallScoreFilter(nextMaxOverallScore);
+    setEvaluationPage(1);
+
+    await loadData({
+      evaluationPage: 1,
+      reviewStatusFilter: nextReviewStatus,
+      recommendedActionFilter: nextRecommendedAction,
+      reviewDecisionFilter: nextReviewDecision,
+      maxOverallScoreFilter: nextMaxOverallScore
     });
   }
 
@@ -200,6 +308,7 @@ export default function AdminEvaluations() {
   };
 
   const totalEvaluations = summary?.totalEvaluations || 0;
+  const reviewCounts = summary?.reviews || {};
 
   return (
     <div className="space-y-6">
@@ -215,9 +324,8 @@ export default function AdminEvaluations() {
             </h1>
 
             <p className="mt-3 max-w-3xl leading-7 text-[var(--app-muted)]">
-              Review source-grounded answers using the 1–5 rubric for context
-              relevance, context sufficiency, answer relevance, answer
-              correctness, and groundedness.
+              Score answers, inspect evidence, and mark reviewed decisions
+              before releasing the assistant to beta users.
             </p>
           </div>
 
@@ -284,9 +392,9 @@ export default function AdminEvaluations() {
         />
         <MetricCard
           icon={<ClipboardCheck />}
-          label="Overall"
-          value={formatScore(averages.overallScore)}
-          detail="Average score"
+          label="Reviewed"
+          value={reviewCounts.reviewed || 0}
+          detail="Human-reviewed evaluations"
         />
         <MetricCard
           icon={<SearchCheck />}
@@ -322,8 +430,7 @@ export default function AdminEvaluations() {
             </h2>
 
             <p className="mt-2 text-sm text-[var(--app-muted)]">
-              These are saved RAG answer snapshots waiting for scoring or
-              already scored.
+              Saved RAG answer snapshots waiting for scoring or already scored.
             </p>
           </div>
 
@@ -480,26 +587,135 @@ export default function AdminEvaluations() {
       </section>
 
       <section className="rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-6">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <h2 className="text-xl font-bold text-[var(--app-text)]">
               Completed evaluations
             </h2>
 
             <p className="mt-2 text-sm text-[var(--app-muted)]">
-              Review scored answers, weak spots, and recommended actions.
+              Filter weak answers, inspect context, and mark human review
+              decisions.
             </p>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-5">
+            <label>
+              <span className="mb-1 block text-xs font-semibold text-[var(--app-muted)]">
+                Review status
+              </span>
+
+              <select
+                value={reviewStatusFilter}
+                onChange={(event) =>
+                  applyEvaluationFilters({
+                    reviewStatusFilter: event.target.value
+                  })
+                }
+                className="w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2 text-sm text-[var(--app-text)] outline-none"
+              >
+                <option value="">All</option>
+                <option value="unreviewed">Unreviewed</option>
+                <option value="reviewed">Reviewed</option>
+              </select>
+            </label>
+
+            <label>
+              <span className="mb-1 block text-xs font-semibold text-[var(--app-muted)]">
+                Action
+              </span>
+
+              <select
+                value={recommendedActionFilter}
+                onChange={(event) =>
+                  applyEvaluationFilters({
+                    recommendedActionFilter: event.target.value
+                  })
+                }
+                className="w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2 text-sm text-[var(--app-text)] outline-none"
+              >
+                <option value="">All</option>
+                <option value="accept">Accept</option>
+                <option value="review_answer">Review answer</option>
+                <option value="improve_retrieval">Improve retrieval</option>
+                <option value="improve_sources">Improve sources</option>
+                <option value="needs_human_review">Needs human review</option>
+              </select>
+            </label>
+
+            <label>
+              <span className="mb-1 block text-xs font-semibold text-[var(--app-muted)]">
+                Decision
+              </span>
+
+              <select
+                value={reviewDecisionFilter}
+                onChange={(event) =>
+                  applyEvaluationFilters({
+                    reviewDecisionFilter: event.target.value
+                  })
+                }
+                className="w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2 text-sm text-[var(--app-text)] outline-none"
+              >
+                <option value="">All</option>
+                <option value="not_decided">Not decided</option>
+                <option value="accepted">Accepted</option>
+                <option value="answer_needs_fix">Answer needs fix</option>
+                <option value="retrieval_needs_fix">Retrieval needs fix</option>
+                <option value="source_needs_fix">Source needs fix</option>
+                <option value="exclude_from_release">Exclude from release</option>
+              </select>
+            </label>
+
+            <label>
+              <span className="mb-1 block text-xs font-semibold text-[var(--app-muted)]">
+                Max score
+              </span>
+
+              <select
+                value={maxOverallScoreFilter}
+                onChange={(event) =>
+                  applyEvaluationFilters({
+                    maxOverallScoreFilter: event.target.value
+                  })
+                }
+                className="w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2 text-sm text-[var(--app-text)] outline-none"
+              >
+                <option value="">Any</option>
+                <option value="2">2 or lower</option>
+                <option value="3">3 or lower</option>
+                <option value="4">4 or lower</option>
+              </select>
+            </label>
+
+            <button
+              onClick={() =>
+                applyEvaluationFilters({
+                  reviewStatusFilter: "unreviewed",
+                  recommendedActionFilter: "",
+                  reviewDecisionFilter: "",
+                  maxOverallScoreFilter: "3"
+                })
+              }
+              className="self-end rounded-2xl border border-[var(--app-border)] px-4 py-2 text-sm font-semibold text-[var(--app-text)] hover:bg-[var(--brand-sky-soft)] hover:text-[var(--brand-blue)]"
+            >
+              Weak queue
+            </button>
           </div>
         </div>
 
         {evaluations.length === 0 ? (
           <p className="mt-5 text-sm text-[var(--app-muted)]">
-            No completed evaluations yet.
+            No completed evaluations match the selected filters.
           </p>
         ) : (
           <div className="mt-5 space-y-4">
             {evaluations.map((evaluation) => (
-              <EvaluationCard key={evaluation._id} evaluation={evaluation} />
+              <EvaluationCard
+                key={evaluation._id}
+                evaluation={evaluation}
+                onOpen={() => openEvaluationDetail(evaluation._id)}
+              />
             ))}
           </div>
         )}
@@ -516,11 +732,25 @@ export default function AdminEvaluations() {
           }
         />
       </section>
+
+      {selectedEvaluation && (
+        <EvaluationDetailModal
+          evaluation={selectedEvaluation}
+          detailStatus={detailStatus}
+          reviewStatus={reviewStatus}
+          reviewDecision={reviewDecision}
+          reviewNote={reviewNote}
+          setReviewDecision={setReviewDecision}
+          setReviewNote={setReviewNote}
+          onClose={closeEvaluationDetail}
+          onSaveReview={handleSaveReview}
+        />
+      )}
     </div>
   );
 }
 
-function EvaluationCard({ evaluation }) {
+function EvaluationCard({ evaluation, onOpen }) {
   const snapshot = evaluation.snapshotId;
 
   return (
@@ -538,6 +768,12 @@ function EvaluationCard({ evaluation }) {
 
             <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1 text-xs font-semibold text-[var(--app-muted)]">
               Action: {formatAction(evaluation.recommendedAction)}
+            </span>
+
+            <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1 text-xs font-semibold text-[var(--app-muted)]">
+              {evaluation.reviewStatus === "reviewed"
+                ? "Reviewed"
+                : "Unreviewed"}
             </span>
           </div>
 
@@ -571,21 +807,262 @@ function EvaluationCard({ evaluation }) {
               score={evaluation.answerGroundedness?.score}
             />
           </div>
-
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <ListBlock title="Strengths" items={evaluation.strengths} />
-            <ListBlock title="Weaknesses" items={evaluation.weaknesses} />
-          </div>
         </div>
 
-        <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 text-sm text-[var(--app-muted)]">
-          <p className="font-semibold text-[var(--app-text)]">Evaluator</p>
-          <p className="mt-1">{evaluation.evaluatorModel || "—"}</p>
-          <p className="mt-3 font-semibold text-[var(--app-text)]">Date</p>
-          <p className="mt-1">{new Date(evaluation.createdAt).toLocaleString()}</p>
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={onOpen}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-blue)] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 dark:text-[#052033]"
+          >
+            <Eye size={16} />
+            Review
+          </button>
+
+          <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4 text-sm text-[var(--app-muted)]">
+            <p className="font-semibold text-[var(--app-text)]">Decision</p>
+            <p className="mt-1">{formatDecision(evaluation.reviewDecision)}</p>
+            <p className="mt-3 font-semibold text-[var(--app-text)]">Date</p>
+            <p className="mt-1">
+              {new Date(evaluation.createdAt).toLocaleString()}
+            </p>
+          </div>
         </div>
       </div>
     </article>
+  );
+}
+
+function EvaluationDetailModal({
+  evaluation,
+  detailStatus,
+  reviewStatus,
+  reviewDecision,
+  reviewNote,
+  setReviewDecision,
+  setReviewNote,
+  onClose,
+  onSaveReview
+}) {
+  const snapshot = evaluation.snapshotId || {};
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 p-4">
+      <div className="mx-auto my-8 max-w-6xl rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-6 shadow-2xl">
+        <div className="flex flex-col gap-4 border-b border-[var(--app-border)] pb-5 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="mb-3 inline-flex rounded-full border border-[var(--brand-sky-border)] bg-[var(--brand-sky-soft)] px-4 py-2 text-sm font-semibold text-[var(--brand-blue)]">
+              Human quality review
+            </div>
+
+            <h2 className="text-2xl font-bold text-[var(--app-text)]">
+              {snapshot.originalQuestion || "Question unavailable"}
+            </h2>
+
+            <p className="mt-2 text-sm text-[var(--app-muted)]">
+              Overall score: {evaluation.overallScore}/5 ·{" "}
+              {formatOverallLabel(evaluation.overallLabel)} ·{" "}
+              {formatAction(evaluation.recommendedAction)}
+            </p>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--app-border)] text-[var(--app-text)] hover:bg-[var(--app-surface-muted)]"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {detailStatus === "loading" ? (
+          <p className="py-10 text-sm text-[var(--app-muted)]">
+            Loading evaluation details...
+          </p>
+        ) : (
+          <div className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+            <div className="space-y-5">
+              <DetailBlock title="Assistant answer">
+                <p className="whitespace-pre-wrap text-sm leading-7 text-[var(--app-muted)]">
+                  {snapshot.answer || "No answer stored."}
+                </p>
+              </DetailBlock>
+
+              <DetailBlock title="Selected context">
+                <pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-2xl bg-[var(--app-surface-muted)] p-4 text-xs leading-6 text-[var(--app-muted)]">
+                  {snapshot.selectedContextText || "No selected context stored."}
+                </pre>
+              </DetailBlock>
+
+              <DetailBlock title="Citations">
+                <div className="space-y-3">
+                  {(snapshot.citations || []).length === 0 ? (
+                    <p className="text-sm text-[var(--app-muted)]">
+                      No citations stored.
+                    </p>
+                  ) : (
+                    snapshot.citations.map((citation, index) => (
+                      <div
+                        key={`${citation.chunkId || index}`}
+                        className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4"
+                      >
+                        <p className="text-sm font-bold text-[var(--app-text)]">
+                          Source {citation.sourceNumber || index + 1}:{" "}
+                          {citation.citationLabel ||
+                            citation.canonicalTitle ||
+                            citation.documentTitle ||
+                            "Untitled source"}
+                        </p>
+                        <p className="mt-2 text-xs leading-5 text-[var(--app-muted)]">
+                          Chunk {citation.chunkIndex} · Score{" "}
+                          {Number(citation.score || 0).toFixed(4)}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
+                          {citation.excerpt}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </DetailBlock>
+            </div>
+
+            <div className="space-y-5">
+              <DetailBlock title="Evaluator scores">
+                <div className="grid gap-3">
+                  <MetricReason
+                    title="Context relevance"
+                    metric={evaluation.contextRelevance}
+                  />
+                  <MetricReason
+                    title="Context sufficiency"
+                    metric={evaluation.contextSufficiency}
+                  />
+                  <MetricReason
+                    title="Answer relevance"
+                    metric={evaluation.answerRelevance}
+                  />
+                  <MetricReason
+                    title="Answer correctness"
+                    metric={evaluation.answerCorrectness}
+                  />
+                  <MetricReason
+                    title="Groundedness"
+                    metric={evaluation.answerGroundedness}
+                  />
+                </div>
+              </DetailBlock>
+
+              <DetailBlock title="Evaluator summary">
+                <p className="text-sm leading-7 text-[var(--app-muted)]">
+                  {evaluation.summary}
+                </p>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <ListBlock title="Strengths" items={evaluation.strengths} />
+                  <ListBlock title="Weaknesses" items={evaluation.weaknesses} />
+                </div>
+              </DetailBlock>
+
+              <DetailBlock title="Human review decision">
+                <label>
+                  <span className="mb-1 block text-xs font-semibold text-[var(--app-muted)]">
+                    Decision
+                  </span>
+
+                  <select
+                    value={reviewDecision}
+                    onChange={(event) => setReviewDecision(event.target.value)}
+                    className="w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-3 text-sm text-[var(--app-text)] outline-none"
+                  >
+                    <option value="accepted">Accepted</option>
+                    <option value="answer_needs_fix">Answer needs fix</option>
+                    <option value="retrieval_needs_fix">
+                      Retrieval needs fix
+                    </option>
+                    <option value="source_needs_fix">Source needs fix</option>
+                    <option value="exclude_from_release">
+                      Exclude from release
+                    </option>
+                  </select>
+                </label>
+
+                <label className="mt-4 block">
+                  <span className="mb-1 block text-xs font-semibold text-[var(--app-muted)]">
+                    Review note
+                  </span>
+
+                  <textarea
+                    value={reviewNote}
+                    onChange={(event) => setReviewNote(event.target.value)}
+                    rows={6}
+                    placeholder="Add a short note explaining what the team should do next."
+                    className="w-full resize-none rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-3 text-sm leading-6 text-[var(--app-text)] outline-none"
+                  />
+                </label>
+
+                {evaluation.reviewStatus === "reviewed" && (
+                  <p className="mt-3 text-xs leading-5 text-[var(--app-muted)]">
+                    Reviewed{" "}
+                    {evaluation.reviewedAt
+                      ? new Date(evaluation.reviewedAt).toLocaleString()
+                      : ""}{" "}
+                    {evaluation.reviewedBy?.name
+                      ? `by ${evaluation.reviewedBy.name}`
+                      : ""}
+                  </p>
+                )}
+
+                <button
+                  onClick={onSaveReview}
+                  disabled={reviewStatus === "loading"}
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-blue)] px-5 py-3 text-sm font-semibold text-white transition disabled:opacity-60 dark:text-[#052033]"
+                >
+                  {reviewStatus === "loading" ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <CheckCircle2 size={16} />
+                  )}
+                  {reviewStatus === "loading"
+                    ? "Saving review..."
+                    : "Mark reviewed"}
+                </button>
+              </DetailBlock>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DetailBlock({ title, children }) {
+  return (
+    <section className="rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface)] p-5">
+      <h3 className="mb-4 text-lg font-bold text-[var(--app-text)]">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function MetricReason({ title, metric }) {
+  return (
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-bold text-[var(--app-text)]">{title}</p>
+        <span className="rounded-full bg-[var(--brand-sky-soft)] px-3 py-1 text-xs font-bold text-[var(--brand-blue)]">
+          {metric?.score || "—"}/5
+        </span>
+      </div>
+
+      <p className="mt-3 text-sm leading-6 text-[var(--app-muted)]">
+        {metric?.reason || "No reason provided."}
+      </p>
+
+      {metric?.improvement && (
+        <p className="mt-3 text-xs leading-5 text-[var(--app-muted)]">
+          Improvement: {metric.improvement}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -602,7 +1079,7 @@ function ScorePill({ label, score }) {
 
 function ListBlock({ title, items = [] }) {
   return (
-    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+    <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4">
       <p className="text-sm font-bold text-[var(--app-text)]">{title}</p>
 
       {items.length === 0 ? (
@@ -701,6 +1178,15 @@ function PaginationControls({ pagination, onPrevious, onNext }) {
   );
 }
 
+function suggestedReviewDecision(action = "") {
+  if (action === "accept") return "accepted";
+  if (action === "improve_retrieval") return "retrieval_needs_fix";
+  if (action === "improve_sources") return "source_needs_fix";
+  if (action === "needs_human_review") return "answer_needs_fix";
+
+  return "answer_needs_fix";
+}
+
 function formatScore(value) {
   const number = Number(value || 0);
 
@@ -737,4 +1223,14 @@ function formatAction(action = "") {
   if (action === "needs_human_review") return "Needs human review";
 
   return "Review answer";
+}
+
+function formatDecision(decision = "") {
+  if (decision === "accepted") return "Accepted";
+  if (decision === "answer_needs_fix") return "Answer needs fix";
+  if (decision === "retrieval_needs_fix") return "Retrieval needs fix";
+  if (decision === "source_needs_fix") return "Source needs fix";
+  if (decision === "exclude_from_release") return "Exclude from release";
+
+  return "Not decided";
 }
