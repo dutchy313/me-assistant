@@ -8,6 +8,13 @@ import {
   sendChatSessionMessage
 } from "../controllers/chat.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
+import { chatRateLimiter } from "../middlewares/productionRateLimit.middleware.js";
+import { validateBody } from "../middlewares/requestValidation.middleware.js";
+import { enforceDailyChatLimit } from "../middlewares/dailyUsageLimit.middleware.js";
+import {
+  chatAskSchema,
+  chatSessionMessageSchema
+} from "../validations/chat.validation.js";
 
 const router = express.Router();
 
@@ -15,26 +22,32 @@ router.use(requireAuth);
 
 router.get("/sessions", listChatSessions);
 
-/*
-  Older frontend route for asking a question.
-  Keep this because ChatWorkspace currently calls /chat/ask.
-*/
-router.post("/ask", askChatQuestion);
+router.post(
+  "/ask",
+  chatRateLimiter,
+  enforceDailyChatLimit(),
+  validateBody(chatAskSchema),
+  askChatQuestion
+);
 
-/*
-  Current/simple route for asking a question.
-*/
-router.post("/message", sendChatMessage);
+router.post(
+  "/message",
+  chatRateLimiter,
+  enforceDailyChatLimit(),
+  validateBody(chatAskSchema),
+  sendChatMessage
+);
 
-/*
-  Older frontend routes for loading and sending messages in a session.
-*/
 router.get("/sessions/:sessionId/messages", getChatSessionMessages);
-router.post("/sessions/:sessionId/messages", sendChatSessionMessage);
 
-/*
-  Current/simple route for loading one session with messages.
-*/
+router.post(
+  "/sessions/:sessionId/messages",
+  chatRateLimiter,
+  enforceDailyChatLimit(),
+  validateBody(chatSessionMessageSchema),
+  sendChatSessionMessage
+);
+
 router.get("/sessions/:sessionId", getChatSession);
 
 export default router;

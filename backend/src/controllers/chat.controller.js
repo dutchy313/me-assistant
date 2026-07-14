@@ -4,6 +4,11 @@ import {
   getChatSessionWithMessages,
   listUserChatSessions
 } from "../services/chat.service.js";
+import { incrementDailyUsage } from "../middlewares/dailyUsageLimit.middleware.js";
+
+function getQuestionFromBody(body = {}) {
+  return body.message || body.question || "";
+}
 
 export const listChatSessions = asyncHandler(async (req, res) => {
   const sessions = await listUserChatSessions({
@@ -63,8 +68,10 @@ export const sendChatMessage = asyncHandler(async (req, res) => {
   const result = await createChatAnswer({
     userId: req.user._id,
     sessionId: req.body.sessionId || null,
-    question: req.body.message || req.body.question
+    question: getQuestionFromBody(req.body)
   });
+
+  await incrementDailyUsage(req, 1);
 
   res.status(200).json({
     status: "success",
@@ -77,8 +84,10 @@ export const askChatQuestion = asyncHandler(async (req, res) => {
   const result = await createChatAnswer({
     userId: req.user._id,
     sessionId: req.body.sessionId || null,
-    question: req.body.message || req.body.question
+    question: getQuestionFromBody(req.body)
   });
+
+  await incrementDailyUsage(req, 1);
 
   res.status(200).json({
     status: "success",
@@ -91,8 +100,10 @@ export const sendChatSessionMessage = asyncHandler(async (req, res) => {
   const result = await createChatAnswer({
     userId: req.user._id,
     sessionId: req.params.sessionId,
-    question: req.body.message || req.body.question
+    question: getQuestionFromBody(req.body)
   });
+
+  await incrementDailyUsage(req, 1);
 
   res.status(200).json({
     status: "success",

@@ -1,4 +1,5 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { incrementDailyUsage } from "../middlewares/dailyUsageLimit.middleware.js";
 import {
   evaluatePendingRagSnapshots,
   evaluateRagSnapshot,
@@ -54,6 +55,8 @@ export const evaluateSnapshot = asyncHandler(async (req, res) => {
     });
   }
 
+  await incrementDailyUsage(req, 1);
+
   res.status(200).json({
     status: "success",
     message: result.alreadyEvaluated
@@ -64,10 +67,14 @@ export const evaluateSnapshot = asyncHandler(async (req, res) => {
 });
 
 export const evaluateSnapshotsBatch = asyncHandler(async (req, res) => {
+  const limit = Number(req.body.limit || 3);
+
   const result = await evaluatePendingRagSnapshots({
     userId: req.user._id,
-    limit: Number(req.body.limit || 3)
+    limit
   });
+
+  await incrementDailyUsage(req, result.evaluated + result.alreadyEvaluated);
 
   res.status(200).json({
     status: "success",
