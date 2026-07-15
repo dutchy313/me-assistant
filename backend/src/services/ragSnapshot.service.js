@@ -84,7 +84,8 @@ function normalizeRetrievedChunks({ retrievedChunks = [], selectedChunks = [] })
 }
 
 function normalizeCitations(citations = []) {
-  return citations.map((citation) => ({
+  return citations.map((citation, index) => ({
+    sourceNumber: normalizeSourceNumber(citation.sourceNumber, index),
     documentId: citation.documentId || null,
     chunkId: citation.chunkId || null,
     documentTitle: citation.documentTitle || "",
@@ -99,17 +100,29 @@ function normalizeCitations(citations = []) {
   }));
 }
 
+function normalizeSourceNumber(sourceNumber, index) {
+  const number = Number(sourceNumber);
+
+  if (Number.isInteger(number) && number >= 1) {
+    return number;
+  }
+
+  return index + 1;
+}
+
 function buildSelectedContextText(selectedChunks = []) {
   return selectedChunks
     .map((chunk, index) => {
+      const sourceNumber = normalizeSourceNumber(chunk.sourceNumber, index);
+
       const label =
         chunk.citationLabel ||
         chunk.canonicalTitle ||
         chunk.documentTitle ||
-        `Source ${index + 1}`;
+        `Source ${sourceNumber}`;
 
       return [
-        `[Source ${index + 1}: ${label}]`,
+        `[Source ${sourceNumber}: ${label}]`,
         `Chunk index: ${chunk.chunkIndex || 0}`,
         `Score: ${Number(chunk.score || 0).toFixed(4)}`,
         "",

@@ -25,16 +25,16 @@ router.get("/sessions", listChatSessions);
 router.post(
   "/ask",
   chatRateLimiter,
-  enforceDailyChatLimit(),
   validateBody(chatAskSchema),
+  enforceDailyChatLimit(),
   askChatQuestion
 );
 
 router.post(
   "/message",
   chatRateLimiter,
-  enforceDailyChatLimit(),
   validateBody(chatAskSchema),
+  enforceDailyChatLimit(),
   sendChatMessage
 );
 
@@ -43,8 +43,8 @@ router.get("/sessions/:sessionId/messages", getChatSessionMessages);
 router.post(
   "/sessions/:sessionId/messages",
   chatRateLimiter,
-  enforceDailyChatLimit(),
   validateBody(chatSessionMessageSchema),
+  enforceDailyChatLimit(),
   sendChatSessionMessage
 );
 

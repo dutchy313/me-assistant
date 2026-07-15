@@ -14,7 +14,13 @@ import ragEvaluationRoutes from "./routes/ragEvaluation.routes.js";
 
 const app = express();
 
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: {
+      policy: "cross-origin"
+    }
+  })
+);
 
 app.use(
   cors({
@@ -46,14 +52,71 @@ app.use((error, req, res, next) => {
   console.error(error);
 
   const statusCode = error.statusCode || 500;
+  const isProduction = process.env.NODE_ENV === "production";
 
-  res.status(statusCode).json({
+  const safeMessage =
+    error.isOperational && error.message
+      ? error.message
+      : getFriendlyUnexpectedErrorMessage(error);
+
+  const responseBody = {
     status: error.status || "error",
-    message:
-      error.isOperational && error.message
-        ? error.message
-        : "Something went wrong"
-  });
+    message: safeMessage
+  };
+
+  if (error.details) {
+    responseBody.details = error.details;
+  }
+
+  if (!isProduction) {
+    responseBody.debug = {
+      message: error.message,
+      stack: error.stack
+    };
+  }
+
+  res.status(statusCode).json(responseBody);
 });
+
+function getFriendlyUnexpectedErrorMessage(error) {
+  const message = String(error?.message || "").toLowerCase();
+
+  if (
+    message.includes("qdrant") ||
+    message.includes("fetch failed") ||
+    message.includes("connect timeout") ||
+    message.includes("und_err_connect_timeout")
+  ) {
+    return "The knowledge search service is temporarily unavailable. Please try again shortly.";
+  }
+
+  if (
+    message.includes("openai") ||
+    message.includes("rate limit") ||
+    message.includes("model") ||
+    message.includes("api key")
+  ) {
+    return "The AI service is temporarily unavailable. Please try again shortly.";
+  }
+
+  if (
+    message.includes("mongodb") ||
+    message.includes("mongoose") ||
+    message.includes("validation failed") ||
+    message.includes("econnrefused")
+  ) {
+    return "The app could not save or load some data. Please try again.";
+  }
+
+  if (
+    message.includes("google") ||
+    message.includes("documentai") ||
+    message.includes("drive")
+  ) {
+    return "The document processing service is temporarily unavailable. Please try again shortly.";
+  }
+
+  return "Something went wrong. Please try again.";
+}
 
 export default app;

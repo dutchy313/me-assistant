@@ -5,12 +5,9 @@ export async function connectDB() {
     throw new Error("MONGODB_URI is missing in environment variables");
   }
 
-  try {
-    await mongoose.connect(process.env.MONGODB_URI);
+  await mongoose.connect(process.env.MONGODB_URI, {
+    serverSelectionTimeoutMS: 10000
+  });
 
-    console.log("MongoDB connected successfully");
-  } catch (error) {
-    console.error("MongoDB connection failed:", error.message);
-    process.exit(1);
-  }
+  console.log("MongoDB connected successfully");
 }

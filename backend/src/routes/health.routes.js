@@ -1,8 +1,9 @@
 import express from "express";
-import { getHealth } from "../controllers/health.controller.js";
+import { getHealth, getReadiness } from "../controllers/health.controller.js";
 
 const router = express.Router();
 
 router.get("/health", getHealth);
+router.get("/ready", getReadiness);
 
 export default router;

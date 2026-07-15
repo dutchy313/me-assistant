@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { serviceUnavailable } from "../utils/AppError.js";
 
 function isEmailConfigured() {
   return Boolean(
@@ -9,10 +10,20 @@ function isEmailConfigured() {
   );
 }
 
+function isProduction() {
+  return process.env.NODE_ENV === "production";
+}
+
 export async function sendLoginOtpEmail({ to, name, otp }) {
   const appName = process.env.APP_NAME || "M&E Assistant";
 
   if (!isEmailConfigured()) {
+    if (isProduction()) {
+      throw serviceUnavailable(
+        "Email login codes are enabled, but the email service is not configured. Please contact the administrator."
+      );
+    }
+
     console.log("Email is not configured. Development OTP:");
     console.log(`User: ${to}`);
     console.log(`OTP: ${otp}`);

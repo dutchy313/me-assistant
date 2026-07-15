@@ -11,9 +11,14 @@ import {
 import { requireAdmin, requireAuth } from "../middlewares/auth.middleware.js";
 import { evaluationRateLimiter } from "../middlewares/productionRateLimit.middleware.js";
 import { enforceDailyEvaluationLimit } from "../middlewares/dailyUsageLimit.middleware.js";
-import { validateBody } from "../middlewares/requestValidation.middleware.js";
+import {
+  validateBody,
+  validateQuery
+} from "../middlewares/requestValidation.middleware.js";
 import {
   evaluateSnapshotsBatchSchema,
+  evaluationSnapshotsQuerySchema,
+  ragEvaluationsQuerySchema,
   reviewEvaluationSchema
 } from "../validations/ragEvaluation.validation.js";
 
@@ -23,13 +28,18 @@ router.use(requireAuth);
 router.use(requireAdmin);
 
 router.get("/summary", getEvaluationSummary);
-router.get("/snapshots", getEvaluationSnapshots);
+
+router.get(
+  "/snapshots",
+  validateQuery(evaluationSnapshotsQuerySchema),
+  getEvaluationSnapshots
+);
 
 router.post(
   "/snapshots/evaluate-batch",
   evaluationRateLimiter,
-  enforceDailyEvaluationLimit(),
   validateBody(evaluateSnapshotsBatchSchema),
+  enforceDailyEvaluationLimit((req) => req.body.limit),
   evaluateSnapshotsBatch
 );
 
@@ -40,7 +50,8 @@ router.post(
   evaluateSnapshot
 );
 
-router.get("/", getEvaluations);
+router.get("/", validateQuery(ragEvaluationsQuerySchema), getEvaluations);
+
 router.get("/:evaluationId", getEvaluation);
 
 router.patch(

@@ -176,6 +176,12 @@ const ragEvaluationSnapshotSchema = new mongoose.Schema(
     citations: {
       type: [
         {
+          sourceNumber: {
+            type: Number,
+            required: true,
+            min: 1
+          },
+
           documentId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Document",
