@@ -7,7 +7,11 @@ import {
   submitSessionFeedback,
   submitSourceFeedback
 } from "../controllers/feedback.controller.js";
-import { requireAdmin, requireAuth } from "../middlewares/auth.middleware.js";
+import {
+  requireAdmin,
+  requireAuth,
+  requireReviewerOrAdmin
+} from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
 import {
   answerFeedbackSchema,
@@ -46,7 +50,7 @@ router.post(
   submitProductFeedback
 );
 
-router.get("/summary", requireAuth, requireAdmin, feedbackSummary);
-router.get("/recent", requireAuth, requireAdmin, recentFeedback);
+router.get("/summary", requireAuth, requireReviewerOrAdmin, feedbackSummary);
+router.get("/recent", requireAuth, requireReviewerOrAdmin, recentFeedback);
 
 export default router;

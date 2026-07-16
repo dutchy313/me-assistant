@@ -1,45 +1,70 @@
-import { verifyAccessToken } from "../services/auth.service.js";
+import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import { forbidden, unauthorized } from "../utils/AppError.js";
+import { USER_ROLES } from "../constants/roles.js";
 
 export async function requireAuth(req, res, next) {
   try {
-    const authHeader = req.headers.authorization;
+    const token = getTokenFromRequest(req);
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        status: "fail",
-        message: "Authentication required"
-      });
+    if (!token) {
+      return next(unauthorized("You must be logged in to continue"));
     }
 
-    const token = authHeader.split(" ")[1];
-    const payload = verifyAccessToken(token);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const user = await User.findById(payload.sub).select(
-      "name email role isActive"
+    const user = await User.findById(decoded.id || decoded.userId).select(
+      "+passwordHash"
     );
 
-    if (!user || !user.isActive) {
-      return res.status(401).json({
-        status: "fail",
-        message: "User not found or inactive"
-      });
+    if (!user) {
+      return next(
+        unauthorized("This account no longer exists. Please log in again.")
+      );
     }
 
     req.user = user;
-    next();
+    return next();
   } catch (error) {
-    next(error);
+    return next(unauthorized("Your session has expired. Please log in again."));
   }
 }
 
-export function requireAdmin(req, res, next) {
-  if (!req.user || req.user.role !== "admin") {
-    return res.status(403).json({
-      status: "fail",
-      message: "Admin access required"
-    });
+export function requireRole(...allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return next(unauthorized("You must be logged in to continue"));
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return next(
+        forbidden(
+          "You do not have permission to access this area. Please contact an administrator if you need access."
+        )
+      );
+    }
+
+    return next();
+  };
+}
+
+export const requireAdmin = requireRole(USER_ROLES.ADMIN);
+
+export const requireReviewerOrAdmin = requireRole(
+  USER_ROLES.REVIEWER,
+  USER_ROLES.ADMIN
+);
+
+function getTokenFromRequest(req) {
+  const authHeader = req.headers.authorization || "";
+
+  if (authHeader.startsWith("Bearer ")) {
+    return authHeader.split(" ")[1];
   }
 
-  next();
+  if (req.cookies?.token) {
+    return req.cookies.token;
+  }
+
+  return null;
 }

@@ -8,7 +8,10 @@ import {
   getEvaluations,
   reviewEvaluation
 } from "../controllers/ragEvaluation.controller.js";
-import { requireAdmin, requireAuth } from "../middlewares/auth.middleware.js";
+import {
+  requireAuth,
+  requireReviewerOrAdmin
+} from "../middlewares/auth.middleware.js";
 import { evaluationRateLimiter } from "../middlewares/productionRateLimit.middleware.js";
 import { enforceDailyEvaluationLimit } from "../middlewares/dailyUsageLimit.middleware.js";
 import {
@@ -25,7 +28,7 @@ import {
 const router = express.Router();
 
 router.use(requireAuth);
-router.use(requireAdmin);
+router.use(requireReviewerOrAdmin);
 
 router.get("/summary", getEvaluationSummary);
 

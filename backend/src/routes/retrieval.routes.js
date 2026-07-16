@@ -4,12 +4,15 @@ import {
   sourceQualitySummary,
   testRetrieval
 } from "../controllers/retrieval.controller.js";
-import { requireAdmin, requireAuth } from "../middlewares/auth.middleware.js";
+import {
+  requireAuth,
+  requireReviewerOrAdmin
+} from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
 router.use(requireAuth);
-router.use(requireAdmin);
+router.use(requireReviewerOrAdmin);
 
 router.post("/test", testRetrieval);
 router.get("/source-quality", sourceQualitySummary);

@@ -8,6 +8,7 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "make:admin": "node src/scripts/makeAdmin.js",
+    "make:reviewer": "node src/scripts/makeReviewer.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },
