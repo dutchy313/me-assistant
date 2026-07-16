@@ -13,6 +13,11 @@ import {
 import { NavLink } from "react-router-dom";
 import { useSelector } from "react-redux";
 import AppFooter from "../layout/AppFooter";
+import {
+  getRoleLabel,
+  isAdmin,
+  isReviewerOrAdmin
+} from "../../constants/roles";
 
 const mainLinks = [
   {
@@ -33,17 +38,30 @@ const mainLinks = [
   }
 ];
 
+const reviewerLinks = [
+  {
+    to: "/dashboard/admin/feedback",
+    label: "Feedback review",
+    icon: BarChart3
+  },
+  {
+    to: "/dashboard/admin/retrieval",
+    label: "Retrieval Lab",
+    icon: Search
+  },
+  {
+    to: "/dashboard/admin/evaluations",
+    label: "Evaluations",
+    icon: ClipboardCheck
+  }
+];
+
 const adminLinks = [
   {
     to: "/dashboard/admin",
     label: "Admin Home",
     icon: ShieldCheck,
     end: true
-  },
-  {
-    to: "/dashboard/admin/feedback",
-    label: "Feedback",
-    icon: BarChart3
   },
   {
     to: "/dashboard/admin/documents",
@@ -54,16 +72,6 @@ const adminLinks = [
     to: "/dashboard/admin/vectors",
     label: "Vectors",
     icon: BrainCircuit
-  },
-  {
-    to: "/dashboard/admin/retrieval",
-    label: "Retrieval",
-    icon: Search
-  },
-  {
-    to: "/dashboard/admin/evaluations",
-    label: "Evaluations",
-    icon: ClipboardCheck
   },
   {
     to: "/dashboard/admin/usage",
@@ -79,7 +87,9 @@ const adminLinks = [
 
 export default function Sidebar() {
   const { user } = useSelector((state) => state.auth);
-  const isAdmin = user?.role === "admin";
+
+  const canReviewQuality = isReviewerOrAdmin(user);
+  const canManageSystem = isAdmin(user);
 
   return (
     <aside className="hidden min-h-screen w-72 shrink-0 border-r border-[var(--app-border)] bg-[var(--sidebar-bg)] lg:flex lg:flex-col">
@@ -102,7 +112,13 @@ export default function Sidebar() {
         <nav className="space-y-6">
           <NavSection title="Workspace" links={mainLinks} />
 
-          {isAdmin && <NavSection title="Admin" links={adminLinks} />}
+          {canReviewQuality && (
+            <NavSection title="Quality review" links={reviewerLinks} />
+          )}
+
+          {canManageSystem && (
+            <NavSection title="System admin" links={adminLinks} />
+          )}
         </nav>
       </div>
 
@@ -117,7 +133,7 @@ export default function Sidebar() {
           </p>
 
           <p className="mt-2 inline-flex rounded-full bg-[var(--brand-sky-soft)] px-3 py-1 text-xs font-semibold text-[var(--brand-blue)]">
-            {user?.role || "user"}
+            {getRoleLabel(user?.role)}
           </p>
         </div>
 

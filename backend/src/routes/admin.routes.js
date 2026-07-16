@@ -1,9 +1,26 @@
 import express from "express";
+import {
+  getAdminUsers,
+  patchAdminUserRole,
+  patchAdminUserStatus
+} from "../controllers/adminUser.controller.js";
 import { requireAdmin, requireAuth } from "../middlewares/auth.middleware.js";
+import {
+  validateBody,
+  validateQuery
+} from "../middlewares/requestValidation.middleware.js";
+import {
+  adminUsersQuerySchema,
+  updateUserRoleSchema,
+  updateUserStatusSchema
+} from "../validations/adminUser.validation.js";
 
 const router = express.Router();
 
-router.get("/health", requireAuth, requireAdmin, (req, res) => {
+router.use(requireAuth);
+router.use(requireAdmin);
+
+router.get("/health", (req, res) => {
   res.status(200).json({
     status: "success",
     message: "Admin route is working",
@@ -15,5 +32,19 @@ router.get("/health", requireAuth, requireAdmin, (req, res) => {
     }
   });
 });
+
+router.get("/users", validateQuery(adminUsersQuerySchema), getAdminUsers);
+
+router.patch(
+  "/users/:userId/role",
+  validateBody(updateUserRoleSchema),
+  patchAdminUserRole
+);
+
+router.patch(
+  "/users/:userId/status",
+  validateBody(updateUserStatusSchema),
+  patchAdminUserStatus
+);
 
 export default router;

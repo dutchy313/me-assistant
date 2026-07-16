@@ -9,6 +9,7 @@ import VerifyOtp from "./pages/auth/VerifyOtp";
 
 import Dashboard from "./pages/dashboard/Dashboard";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import RoleRoute from "./components/auth/RoleRoute";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 
 import ChatWorkspace from "./pages/app/ChatWorkspace";
@@ -21,6 +22,10 @@ import AdminRetrieval from "./pages/app/AdminRetrieval";
 import AdminEvaluations from "./pages/app/AdminEvaluations";
 
 import { fetchMeThunk } from "./store/authSlice";
+import { USER_ROLES } from "./constants/roles";
+
+const ADMIN_ONLY = [USER_ROLES.ADMIN];
+const REVIEWER_OR_ADMIN = [USER_ROLES.REVIEWER, USER_ROLES.ADMIN];
 
 export default function App() {
   const dispatch = useDispatch();
@@ -66,72 +71,72 @@ export default function App() {
           <Route
             path="admin"
             element={
-              <AdminOnly token={token} user={user}>
+              <RoleRoute allowedRoles={ADMIN_ONLY}>
                 <AdminHome />
-              </AdminOnly>
+              </RoleRoute>
             }
           />
 
           <Route
             path="admin/feedback"
             element={
-              <AdminOnly token={token} user={user}>
+              <RoleRoute allowedRoles={REVIEWER_OR_ADMIN}>
                 <AdminFeedbackSummary />
-              </AdminOnly>
+              </RoleRoute>
             }
           />
 
           <Route
             path="admin/documents"
             element={
-              <AdminOnly token={token} user={user}>
+              <RoleRoute allowedRoles={ADMIN_ONLY}>
                 <AdminDocuments />
-              </AdminOnly>
+              </RoleRoute>
             }
           />
 
           <Route
             path="admin/vectors"
             element={
-              <AdminOnly token={token} user={user}>
+              <RoleRoute allowedRoles={ADMIN_ONLY}>
                 <AdminVectors />
-              </AdminOnly>
+              </RoleRoute>
             }
           />
 
           <Route
             path="admin/retrieval"
             element={
-              <AdminOnly token={token} user={user}>
+              <RoleRoute allowedRoles={REVIEWER_OR_ADMIN}>
                 <AdminRetrieval />
-              </AdminOnly>
+              </RoleRoute>
             }
           />
 
           <Route
-            path="/dashboard/admin/evaluations"
+            path="admin/evaluations"
             element={
-              <AdminOnly token={token} user={user}>
+              <RoleRoute allowedRoles={REVIEWER_OR_ADMIN}>
                 <AdminEvaluations />
-              </AdminOnly>
+              </RoleRoute>
             }
           />
 
           <Route
             path="admin/usage"
             element={
-              <AdminOnly token={token} user={user}>
+              <RoleRoute allowedRoles={ADMIN_ONLY}>
                 <AdminHome />
-              </AdminOnly>
+              </RoleRoute>
             }
           />
 
           <Route
             path="admin/settings"
             element={
-              <AdminOnly token={token} user={user}>
+              <RoleRoute allowedRoles={ADMIN_ONLY}>
                 <AdminHome />
-              </AdminOnly>
+              </RoleRoute>
             }
           />
         </Route>
@@ -140,20 +145,4 @@ export default function App() {
       </Routes>
     </BrowserRouter>
   );
-}
-
-function AdminOnly({ token, user, children }) {
-  if (token && !user) {
-    return (
-      <div className="rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-8">
-        <p className="text-[var(--app-muted)]">Checking admin access...</p>
-      </div>
-    );
-  }
-
-  if (user?.role !== "admin") {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  return children;
 }

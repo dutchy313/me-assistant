@@ -14,7 +14,8 @@ const userSchema = new mongoose.Schema(
       required: [true, "Email is required"],
       unique: true,
       lowercase: true,
-      trim: true
+      trim: true,
+      index: true
     },
 
     passwordHash: {
@@ -26,12 +27,13 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["user", "reviewer", "admin"],
       default: "user",
-      index: true 
+      index: true
     },
 
     isActive: {
       type: Boolean,
-      default: true
+      default: true,
+      index: true
     },
 
     loginOtpHash: {

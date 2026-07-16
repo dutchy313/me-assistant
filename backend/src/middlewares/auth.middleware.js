@@ -12,14 +12,25 @@ export async function requireAuth(req, res, next) {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = getUserIdFromDecodedToken(decoded);
 
-    const user = await User.findById(decoded.id || decoded.userId).select(
-      "+passwordHash"
-    );
+    if (!userId) {
+      return next(unauthorized("Your session is invalid. Please log in again."));
+    }
+
+    const user = await User.findById(userId);
 
     if (!user) {
       return next(
         unauthorized("This account no longer exists. Please log in again.")
+      );
+    }
+
+    if (!user.isActive) {
+      return next(
+        unauthorized(
+          "This account has been disabled. Please contact an administrator."
+        )
       );
     }
 
@@ -67,4 +78,20 @@ function getTokenFromRequest(req) {
   }
 
   return null;
+}
+
+function getUserIdFromDecodedToken(decoded) {
+  if (!decoded || typeof decoded !== "object") {
+    return null;
+  }
+
+  return (
+    decoded.id ||
+    decoded.userId ||
+    decoded._id ||
+    decoded.sub ||
+    decoded.user?.id ||
+    decoded.user?._id ||
+    null
+  );
 }
