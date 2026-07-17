@@ -2,13 +2,14 @@ import {
   BarChart3,
   BookOpenCheck,
   BrainCircuit,
-  FileText,
   ClipboardCheck,
+  FileText,
   Home,
   MessageSquareText,
   Search,
   Settings,
-  ShieldCheck
+  ShieldCheck,
+  Users
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useSelector } from "react-redux";
@@ -62,6 +63,11 @@ const adminLinks = [
     label: "Admin Home",
     icon: ShieldCheck,
     end: true
+  },
+  {
+    to: "/dashboard/admin/users",
+    label: "Users",
+    icon: Users
   },
   {
     to: "/dashboard/admin/documents",
