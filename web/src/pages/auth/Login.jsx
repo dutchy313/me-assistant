@@ -79,7 +79,7 @@ export default function Login() {
             required
             type="password"
             className="w-full rounded-2xl border border-[var(--brand-border-soft)] px-4 py-3 outline-none transition focus:border-[var(--brand-sky)] focus:ring-4 focus:ring-[var(--brand-sky)]/20"
-            placeholder="Password123"
+            placeholder="Enter your password"
           />
         </div>
 

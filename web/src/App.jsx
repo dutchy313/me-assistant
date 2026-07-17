@@ -14,6 +14,7 @@ import DashboardLayout from "./components/dashboard/DashboardLayout";
 
 import ChatWorkspace from "./pages/app/ChatWorkspace";
 import FeedbackCenter from "./pages/app/FeedbackCenter";
+import Account from "./pages/app/Account";
 import AdminHome from "./pages/app/AdminHome";
 import AdminFeedbackSummary from "./pages/app/AdminFeedbackSummary";
 import AdminDocuments from "./pages/app/AdminDocuments";
@@ -21,6 +22,7 @@ import AdminVectors from "./pages/app/AdminVectors";
 import AdminRetrieval from "./pages/app/AdminRetrieval";
 import AdminEvaluations from "./pages/app/AdminEvaluations";
 import AdminUsers from "./pages/app/AdminUsers";
+import AdminUsage from "./pages/app/AdminUsage";
 
 import { fetchMeThunk } from "./store/authSlice";
 import { USER_ROLES } from "./constants/roles";
@@ -68,6 +70,8 @@ export default function App() {
           <Route path="chat" element={<ChatWorkspace />} />
 
           <Route path="feedback" element={<FeedbackCenter />} />
+
+          <Route path="account" element={<Account />} />
 
           <Route
             path="admin"
@@ -136,7 +140,7 @@ export default function App() {
             path="admin/usage"
             element={
               <RoleRoute allowedRoles={ADMIN_ONLY}>
-                <AdminHome />
+                <AdminUsage />
               </RoleRoute>
             }
           />

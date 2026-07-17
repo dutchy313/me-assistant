@@ -9,6 +9,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  UserCircle2,
   Users
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -36,6 +37,11 @@ const mainLinks = [
     to: "/dashboard/feedback",
     label: "Feedback",
     icon: BarChart3
+  },
+  {
+    to: "/dashboard/account",
+    label: "Account",
+    icon: UserCircle2
   }
 ];
 

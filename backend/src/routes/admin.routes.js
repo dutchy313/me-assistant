@@ -4,6 +4,7 @@ import {
   patchAdminUserRole,
   patchAdminUserStatus
 } from "../controllers/adminUser.controller.js";
+import { getAdminUsage } from "../controllers/adminUsage.controller.js";
 import { requireAdmin, requireAuth } from "../middlewares/auth.middleware.js";
 import {
   validateBody,
@@ -14,6 +15,7 @@ import {
   updateUserRoleSchema,
   updateUserStatusSchema
 } from "../validations/adminUser.validation.js";
+import { adminUsageQuerySchema } from "../validations/adminUsage.validation.js";
 
 const router = express.Router();
 
@@ -32,6 +34,8 @@ router.get("/health", (req, res) => {
     }
   });
 });
+
+router.get("/usage", validateQuery(adminUsageQuerySchema), getAdminUsage);
 
 router.get("/users", validateQuery(adminUsersQuerySchema), getAdminUsers);
 

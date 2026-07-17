@@ -57,7 +57,7 @@ export default function Register() {
             onChange={handleChange}
             required
             className="w-full rounded-2xl border border-[var(--brand-border-soft)] px-4 py-3 outline-none transition focus:border-[var(--brand-sky)] focus:ring-4 focus:ring-[var(--brand-sky)]/20"
-            placeholder="Jane Doe"
+            placeholder="Your full name"
           />
         </div>
 
@@ -87,7 +87,7 @@ export default function Register() {
             required
             type="password"
             className="w-full rounded-2xl border border-[var(--brand-border-soft)] px-4 py-3 outline-none transition focus:border-[var(--brand-sky)] focus:ring-4 focus:ring-[var(--brand-sky)]/20"
-            placeholder="Password123"
+            placeholder="Create a strong password"
           />
           <p className="mt-2 text-xs text-slate-500">
             Use at least 8 characters, one uppercase letter, one lowercase

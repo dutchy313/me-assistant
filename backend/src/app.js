@@ -4,6 +4,7 @@ import helmet from "helmet";
 
 import healthRoutes from "./routes/health.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import accountRoutes from "./routes/account.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import feedbackRoutes from "./routes/feedback.routes.js";
 import documentRoutes from "./routes/document.routes.js";
@@ -33,6 +34,7 @@ app.use(express.json({ limit: "1mb" }));
 
 app.use("/api/v1", healthRoutes);
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/account", accountRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/feedback", feedbackRoutes);
 app.use("/api/v1/admin/documents", documentRoutes);
