@@ -227,7 +227,7 @@ export default function Landing() {
             <FeatureCard
               icon={<ClipboardCheck />}
               title="Review quality"
-              text="Admins evaluate answers, inspect context, and mark responses reviewed before wider release."
+              text="Admins evaluate answers, inspect context, and mark responses reviewed before broader use."
             />
           </div>
         </div>
@@ -256,7 +256,7 @@ export default function Landing() {
             />
             <QualityItem
               title="Retrieval Lab"
-              text="Admins can inspect chunk relevance before release."
+              text="Reviewers can inspect chunk relevance and source quality."
             />
             <QualityItem
               title="RAG evaluation"
@@ -264,7 +264,7 @@ export default function Landing() {
             />
             <QualityItem
               title="Human review"
-              text="The team can mark answers accepted, needing fixes, or excluded from release."
+              text="The team can review answers, note risks, and improve the evidence library."
             />
           </div>
         </div>
@@ -275,16 +275,16 @@ export default function Landing() {
           <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
             <div>
               <p className="text-sm font-black uppercase tracking-[0.2em] opacity-80">
-                Ready for controlled beta
+                Source-backed evaluation support
               </p>
               <h2 className="mt-3 text-3xl font-black tracking-tight">
-                Invite a small group, monitor quality, and improve with
-                evidence.
+                Turn your M&amp;E knowledge library into practical, cited
+                answers.
               </h2>
               <p className="mt-4 max-w-3xl leading-7 opacity-90">
-                Start with trusted users, review their questions, evaluate the
-                answers, and improve the source library before opening access
-                more widely.
+                Ask questions, review the sources behind each response, and use
+                feedback to strengthen the quality of evaluation learning over
+                time.
               </p>
             </div>
 
