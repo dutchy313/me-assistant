@@ -1,6 +1,7 @@
 import express from "express";
 import {
   askChatQuestion,
+  clearChatHistory,
   getChatSession,
   getChatSessionMessages,
   listChatSessions,
@@ -21,6 +22,7 @@ const router = express.Router();
 router.use(requireAuth);
 
 router.get("/sessions", listChatSessions);
+router.delete("/sessions", clearChatHistory);
 
 router.post(
   "/ask",

@@ -57,9 +57,9 @@ async function reserveDailyUsage({
       }
     },
     {
-      new: true,
-      upsert: true,
-      setDefaultsOnInsert: true
+    returnDocument: "after",
+    upsert: true,
+    setDefaultsOnInsert: true
     }
   );
 

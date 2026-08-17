@@ -4,6 +4,7 @@ import crypto from "crypto";
 import User from "../models/User.js";
 import AppError from "../utils/AppError.js";
 import { sendLoginOtpEmail } from "./email.service.js";
+import { verifyTurnstileToken } from "./turnstile.service.js";
 
 function getJwtSecret() {
   if (!process.env.JWT_SECRET) {
@@ -62,13 +63,22 @@ function createSixDigitOtp() {
   return crypto.randomInt(100000, 999999).toString();
 }
 
-export async function registerUser({ name, email, password, companyWebsite }) {
+export async function registerUser({
+  name,
+  email,
+  password,
+  companyWebsite,
+  turnstileToken,
+  ipAddress
+}) {
   // Honeypot anti-bot check.
-  // The frontend will include this as a hidden field.
+  // The frontend includes this as a hidden field.
   // Real users will leave it empty.
   if (companyWebsite) {
     throw new AppError("Signup could not be completed", 400);
   }
+
+  await verifyTurnstileToken(turnstileToken, ipAddress);
 
   const existingUser = await User.findOne({ email });
 

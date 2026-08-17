@@ -1,5 +1,6 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
+  clearUserChatHistory,
   createChatAnswer,
   getChatSessionWithMessages,
   listUserChatSessions
@@ -19,6 +20,20 @@ export const listChatSessions = asyncHandler(async (req, res) => {
     status: "success",
     data: {
       sessions
+    }
+  });
+});
+
+export const clearChatHistory = asyncHandler(async (req, res) => {
+  const result = await clearUserChatHistory({
+    userId: req.user._id
+  });
+
+  res.status(200).json({
+    status: "success",
+    message: "Chat history cleared",
+    data: {
+      result
     }
   });
 });

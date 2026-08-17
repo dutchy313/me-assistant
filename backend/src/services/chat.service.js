@@ -49,12 +49,45 @@ export async function getChatSessionWithMessages({ sessionId, userId }) {
   }
 
   const messages = await ChatMessage.find({
-    sessionId: session._id
+    sessionId: session._id,
+    userId
   }).sort({ createdAt: 1 });
 
   return {
     session,
     messages
+  };
+}
+
+export async function clearUserChatHistory({ userId }) {
+  const sessions = await ChatSession.find({ userId }).select("_id");
+
+  const sessionIds = sessions.map((session) => session._id);
+
+  if (sessionIds.length === 0) {
+    return {
+      deletedSessions: 0,
+      deletedMessages: 0
+    };
+  }
+
+  const messageResult = await ChatMessage.deleteMany({
+    userId,
+    sessionId: {
+      $in: sessionIds
+    }
+  });
+
+  const sessionResult = await ChatSession.deleteMany({
+    userId,
+    _id: {
+      $in: sessionIds
+    }
+  });
+
+  return {
+    deletedSessions: sessionResult.deletedCount || 0,
+    deletedMessages: messageResult.deletedCount || 0
   };
 }
 

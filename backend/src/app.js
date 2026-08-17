@@ -5,13 +5,13 @@ import helmet from "helmet";
 import healthRoutes from "./routes/health.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import accountRoutes from "./routes/account.routes.js";
-import adminRoutes from "./routes/admin.routes.js";
 import feedbackRoutes from "./routes/feedback.routes.js";
 import documentRoutes from "./routes/document.routes.js";
 import vectorRoutes from "./routes/vector.routes.js";
 import retrievalRoutes from "./routes/retrieval.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
 import ragEvaluationRoutes from "./routes/ragEvaluation.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
 
 const app = express();
 
@@ -35,13 +35,35 @@ app.use(express.json({ limit: "1mb" }));
 app.use("/api/v1", healthRoutes);
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/account", accountRoutes);
-app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/feedback", feedbackRoutes);
+app.use("/api/v1/chat", chatRoutes);
+
+/*
+  Important route-order note:
+
+  These specific admin subroutes must be mounted before the general
+  /api/v1/admin route.
+
+  Why:
+  /api/v1/admin uses requireAdmin.
+  /api/v1/admin/retrieval and /api/v1/admin/evaluations allow reviewers too.
+
+  If /api/v1/admin is mounted first, reviewers get blocked before the request
+  reaches the reviewer-friendly routes.
+*/
 app.use("/api/v1/admin/documents", documentRoutes);
 app.use("/api/v1/admin/vectors", vectorRoutes);
 app.use("/api/v1/admin/retrieval", retrievalRoutes);
 app.use("/api/v1/admin/evaluations", ragEvaluationRoutes);
-app.use("/api/v1/chat", chatRoutes);
+
+/*
+  Keep the broad admin route last among admin routes.
+  It handles admin-only endpoints such as:
+  - /api/v1/admin/users
+  - /api/v1/admin/usage
+  - /api/v1/admin/health
+*/
+app.use("/api/v1/admin", adminRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

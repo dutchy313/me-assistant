@@ -1,17 +1,11 @@
 import { useEffect, useState } from "react";
-import {
-  BrainCircuit,
-  Database,
-  PlayCircle,
-  RotateCcw,
-  Search
-} from "lucide-react";
+import { Database, Microscope, PlayCircle, RotateCcw } from "lucide-react";
+import { Link } from "react-router-dom";
 import {
   embedPendingChunks,
   getVectorStats,
   prepareVectorCollection,
-  resetFailedEmbeddings,
-  semanticVectorSearch
+  resetFailedEmbeddings
 } from "../../api/vectorApi";
 
 export default function AdminVectors() {
@@ -29,11 +23,7 @@ export default function AdminVectors() {
   const [prepareStatus, setPrepareStatus] = useState("idle");
   const [embedStatus, setEmbedStatus] = useState("idle");
   const [resetStatus, setResetStatus] = useState("idle");
-  const [searchStatus, setSearchStatus] = useState("idle");
   const [message, setMessage] = useState("");
-
-  const [query, setQuery] = useState("mixed methods evaluation design");
-  const [results, setResults] = useState([]);
 
   async function loadStats() {
     try {
@@ -113,26 +103,6 @@ export default function AdminVectors() {
     } catch (error) {
       setResetStatus("failed");
       setMessage(error.response?.data?.message || "Could not reset embeddings");
-    }
-  }
-
-  async function handleSearch(event) {
-    event.preventDefault();
-
-    try {
-      setSearchStatus("loading");
-      setMessage("");
-
-      const response = await semanticVectorSearch({
-        query,
-        limit: 5
-      });
-
-      setResults(response.data.result.results);
-      setSearchStatus("succeeded");
-    } catch (error) {
-      setSearchStatus("failed");
-      setMessage(error.response?.data?.message || "Search failed");
     }
   }
 
@@ -222,6 +192,12 @@ export default function AdminVectors() {
           </div>
         )}
 
+        {status === "failed" && !message && (
+          <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            Could not load vector stats.
+          </div>
+        )}
+
         <div className="mt-6">
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="font-semibold text-[var(--app-text)]">
@@ -252,65 +228,32 @@ export default function AdminVectors() {
       </section>
 
       <section className="rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-6">
-        <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--brand-sky-soft)] text-[var(--brand-blue)]">
-            <Search size={20} />
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--brand-sky-soft)] text-[var(--brand-blue)]">
+              <Microscope size={20} />
+            </div>
+
+            <div>
+              <h2 className="text-xl font-bold text-[var(--app-text)]">
+                Test retrieval quality in Retrieval Lab
+              </h2>
+
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--app-muted)]">
+                Vector Index is for managing embeddings and Qdrant indexing.
+                Use Retrieval Lab to test semantic search, inspect matching
+                chunks, check relevance scores, and preview the sources that
+                power chat citations.
+              </p>
+            </div>
           </div>
 
-          <div>
-            <h2 className="text-xl font-bold text-[var(--app-text)]">
-              Test semantic search
-            </h2>
-            <p className="text-sm text-[var(--app-muted)]">
-              This checks whether Qdrant can retrieve relevant chunks.
-            </p>
-          </div>
-        </div>
-
-        <form onSubmit={handleSearch} className="flex flex-col gap-3 lg:flex-row">
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className="min-w-0 flex-1 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3 text-[var(--app-text)] outline-none"
-            placeholder="Example: outcome indicators for youth employment"
-          />
-
-          <button
-            type="submit"
-            disabled={searchStatus === "loading" || stats.embeddedChunks === 0}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--brand-blue)] px-5 py-3 text-sm font-semibold text-white disabled:opacity-60 dark:text-[#052033]"
+          <Link
+            to="/dashboard/admin/retrieval"
+            className="inline-flex items-center justify-center rounded-2xl bg-[var(--brand-blue)] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--brand-blue)]/20 transition hover:bg-[var(--brand-blue-hover)] dark:text-[#052033]"
           >
-            <BrainCircuit size={16} />
-            {searchStatus === "loading" ? "Searching..." : "Search"}
-          </button>
-        </form>
-
-        <div className="mt-6 space-y-4">
-          {results.length === 0 ? (
-            <p className="text-sm text-[var(--app-muted)]">
-              No search results yet.
-            </p>
-          ) : (
-            results.map((result) => (
-              <div
-                key={result.id}
-                className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] p-4"
-              >
-                <p className="font-semibold text-[var(--app-text)]">
-                  {result.payload?.documentTitle || "Untitled document"}
-                </p>
-
-                <p className="mt-1 text-xs text-[var(--app-muted)]">
-                  Chunk {result.payload?.chunkIndex} · Score{" "}
-                  {Number(result.score || 0).toFixed(4)}
-                </p>
-
-                <p className="mt-3 line-clamp-5 text-sm leading-6 text-[var(--app-muted)]">
-                  {result.payload?.text}
-                </p>
-              </div>
-            ))
-          )}
+            Open Retrieval Lab
+          </Link>
         </div>
       </section>
     </div>

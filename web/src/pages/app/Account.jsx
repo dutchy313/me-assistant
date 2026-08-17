@@ -1,8 +1,17 @@
 import { useState } from "react";
-import { KeyRound, Loader2, ShieldCheck, UserCircle2 } from "lucide-react";
-import { useSelector } from "react-redux";
+import {
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  ShieldCheck,
+  UserCircle2
+} from "lucide-react";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import { changePassword } from "../../api/accountApi";
 import { getRoleLabel } from "../../constants/roles";
+import { logout } from "../../store/authSlice";
 
 const initialForm = {
   currentPassword: "",
@@ -10,10 +19,19 @@ const initialForm = {
   confirmNewPassword: ""
 };
 
+const initialVisibility = {
+  currentPassword: false,
+  newPassword: false,
+  confirmNewPassword: false
+};
+
 export default function Account() {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { user } = useSelector((state) => state.auth);
 
   const [form, setForm] = useState(initialForm);
+  const [visiblePasswords, setVisiblePasswords] = useState(initialVisibility);
   const [status, setStatus] = useState("idle");
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("info");
@@ -22,6 +40,13 @@ export default function Account() {
     setForm((current) => ({
       ...current,
       [field]: value
+    }));
+  }
+
+  function togglePasswordVisibility(field) {
+    setVisiblePasswords((current) => ({
+      ...current,
+      [field]: !current[field]
     }));
   }
 
@@ -36,9 +61,21 @@ export default function Account() {
       await changePassword(form);
 
       setForm(initialForm);
+      setVisiblePasswords(initialVisibility);
       setStatus("succeeded");
       setMessageType("success");
-      setMessage("Password changed successfully.");
+      setMessage("Password changed successfully. Redirecting you to login...");
+
+      window.setTimeout(() => {
+        dispatch(logout());
+        navigate("/login", {
+          replace: true,
+          state: {
+            message:
+              "Your password was changed successfully. Please sign in with your new password."
+          }
+        });
+      }, 1200);
     } catch (error) {
       setStatus("failed");
       setMessageType("error");
@@ -126,70 +163,91 @@ export default function Account() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <label>
-              <span className="mb-2 block text-sm font-semibold text-[var(--app-text)]">
-                Current password
-              </span>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <PasswordField
+              label="Current password"
+              value={form.currentPassword}
+              visible={visiblePasswords.currentPassword}
+              onChange={(value) => updateField("currentPassword", value)}
+              onToggle={() => togglePasswordVisibility("currentPassword")}
+              placeholder="Enter current password"
+              autoComplete="current-password"
+            />
 
-              <input
-                type="password"
-                value={form.currentPassword}
-                onChange={(event) =>
-                  updateField("currentPassword", event.target.value)
-                }
-                placeholder="Enter current password"
-                autoComplete="current-password"
-                className="w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3 text-[var(--app-text)] outline-none transition focus:border-[var(--brand-blue)]"
-              />
-            </label>
+            <PasswordField
+              label="New password"
+              value={form.newPassword}
+              visible={visiblePasswords.newPassword}
+              onChange={(value) => updateField("newPassword", value)}
+              onToggle={() => togglePasswordVisibility("newPassword")}
+              placeholder="Enter new password"
+              autoComplete="new-password"
+            />
 
-            <label>
-              <span className="mb-2 block text-sm font-semibold text-[var(--app-text)]">
-                New password
-              </span>
+            <PasswordField
+              label="Confirm new password"
+              value={form.confirmNewPassword}
+              visible={visiblePasswords.confirmNewPassword}
+              onChange={(value) => updateField("confirmNewPassword", value)}
+              onToggle={() => togglePasswordVisibility("confirmNewPassword")}
+              placeholder="Confirm new password"
+              autoComplete="new-password"
+            />
 
-              <input
-                type="password"
-                value={form.newPassword}
-                onChange={(event) =>
-                  updateField("newPassword", event.target.value)
-                }
-                placeholder="Enter new password"
-                autoComplete="new-password"
-                className="w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3 text-[var(--app-text)] outline-none transition focus:border-[var(--brand-blue)]"
-              />
-            </label>
-
-            <label>
-              <span className="mb-2 block text-sm font-semibold text-[var(--app-text)]">
-                Confirm new password
-              </span>
-
-              <input
-                type="password"
-                value={form.confirmNewPassword}
-                onChange={(event) =>
-                  updateField("confirmNewPassword", event.target.value)
-                }
-                placeholder="Confirm new password"
-                autoComplete="new-password"
-                className="w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3 text-[var(--app-text)] outline-none transition focus:border-[var(--brand-blue)]"
-              />
-            </label>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-blue)] px-5 py-4 text-sm font-bold text-white shadow-lg shadow-[var(--brand-blue)]/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 dark:text-[#052033]"
-            >
-              {loading ? <Loader2 size={18} className="animate-spin" /> : null}
-              {loading ? "Changing password..." : "Change password"}
-            </button>
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand-blue)] px-5 py-4 text-sm font-bold text-white shadow-lg shadow-[var(--brand-blue)]/20 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 dark:text-[#052033]"
+              >
+                {loading ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : null}
+                {loading ? "Changing password..." : "Change password"}
+              </button>
+            </div>
           </form>
         </div>
       </section>
     </div>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  visible,
+  onChange,
+  onToggle,
+  placeholder,
+  autoComplete
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-semibold text-[var(--app-text)]">
+        {label}
+      </span>
+
+      <div className="flex items-center rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-muted)] transition focus-within:border-[var(--brand-blue)] focus-within:ring-2 focus-within:ring-[var(--brand-sky)]/20">
+        <input
+          type={visible ? "text" : "password"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          className="min-w-0 flex-1 rounded-l-2xl bg-transparent px-4 py-3 text-[var(--app-text)] outline-none"
+        />
+
+        <button
+          type="button"
+          onClick={onToggle}
+          className="mr-2 inline-flex h-10 w-10 items-center justify-center rounded-xl text-[var(--app-muted)] transition hover:bg-[var(--brand-sky-soft)] hover:text-[var(--brand-blue)]"
+          aria-label={visible ? `Hide ${label}` : `Show ${label}`}
+        >
+          {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+    </label>
   );
 }
 

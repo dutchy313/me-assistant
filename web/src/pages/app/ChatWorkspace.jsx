@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { BookOpenCheck, Loader2, MessageSquareText, Send } from "lucide-react";
+import {
+  BookOpenCheck,
+  Check,
+  Copy,
+  Loader2,
+  MessageSquareText,
+  Send,
+  Trash2
+} from "lucide-react";
 import {
   askChatQuestion,
+  clearChatHistory,
   getChatMessages,
   getChatSessions
 } from "../../api/chatApi";
@@ -15,7 +24,9 @@ export default function ChatWorkspace() {
   const [question, setQuestion] = useState("");
   const [status, setStatus] = useState("idle");
   const [loadStatus, setLoadStatus] = useState("loading");
+  const [clearStatus, setClearStatus] = useState("idle");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const bottomRef = useRef(null);
 
@@ -30,6 +41,11 @@ export default function ChatWorkspace() {
 
       if (loadedSessions.length > 0 && !activeSessionId) {
         setActiveSessionId(loadedSessions[0]._id);
+      }
+
+      if (loadedSessions.length === 0) {
+        setActiveSessionId(null);
+        setMessages([]);
       }
 
       setLoadStatus("succeeded");
@@ -71,6 +87,7 @@ export default function ChatWorkspace() {
 
     setQuestion("");
     setError("");
+    setNotice("");
     setStatus("loading");
 
     const temporaryUserMessage = {
@@ -112,6 +129,40 @@ export default function ChatWorkspace() {
     setMessages([]);
     setQuestion("");
     setError("");
+    setNotice("");
+  }
+
+  async function handleClearHistory() {
+    if (sessions.length === 0 || clearStatus === "loading") return;
+
+    const confirmed = window.confirm(
+      "Clear all chat history?\n\nThis will delete your saved chat conversations. This action cannot be undone."
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setClearStatus("loading");
+      setError("");
+      setNotice("");
+
+      const response = await clearChatHistory();
+      const result = response.data.result;
+
+      setSessions([]);
+      setActiveSessionId(null);
+      setMessages([]);
+      setQuestion("");
+
+      setNotice(
+        `Chat history cleared. Deleted ${result.deletedSessions} conversation(s) and ${result.deletedMessages} message(s).`
+      );
+
+      setClearStatus("succeeded");
+    } catch (error) {
+      setClearStatus("failed");
+      setError(error.response?.data?.message || "Could not clear chat history");
+    }
   }
 
   function getPreviousUserQuestion(index) {
@@ -127,7 +178,7 @@ export default function ChatWorkspace() {
   return (
     <div className="grid gap-6 xl:grid-cols-[320px_1fr]">
       <aside className="rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface)] p-5">
-        <div className="mb-5 flex items-center justify-between gap-3">
+        <div className="mb-5 flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-[var(--brand-blue)]">
               Conversations
@@ -137,24 +188,46 @@ export default function ChatWorkspace() {
             </h2>
           </div>
 
-          <button
-            onClick={startNewChat}
-            className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm font-semibold text-[var(--app-text)] hover:bg-[var(--brand-sky-soft)] hover:text-[var(--brand-blue)]"
-          >
-            New
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={startNewChat}
+              className="rounded-xl border border-[var(--app-border)] px-3 py-2 text-sm font-semibold text-[var(--app-text)] hover:bg-[var(--brand-sky-soft)] hover:text-[var(--brand-blue)]"
+            >
+              New
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClearHistory}
+              disabled={sessions.length === 0 || clearStatus === "loading"}
+              className="inline-flex items-center justify-center gap-1 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+              title="Clear all chat history"
+            >
+              <Trash2 size={13} />
+              {clearStatus === "loading" ? "Clearing..." : "Clear"}
+            </button>
+          </div>
         </div>
+
+        {notice && (
+          <div className="mb-4 rounded-2xl border border-[var(--brand-sky-border)] bg-[var(--brand-sky-soft)] px-4 py-3 text-xs font-medium leading-5 text-[var(--brand-blue)]">
+            {notice}
+          </div>
+        )}
 
         {loadStatus === "loading" ? (
           <p className="text-sm text-[var(--app-muted)]">Loading sessions...</p>
         ) : sessions.length === 0 ? (
           <p className="text-sm text-[var(--app-muted)]">No chats yet.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="max-h-[calc(100vh-280px)] space-y-2 overflow-y-auto pr-1">
             {sessions.map((session) => (
               <button
                 key={session._id}
-                onClick={() => setActiveSessionId(session._id)}
+                onClick={() => {
+                  setNotice("");
+                  setActiveSessionId(session._id);
+                }}
                 className={[
                   "w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
                   activeSessionId === session._id
@@ -265,7 +338,26 @@ function EmptyState() {
 }
 
 function ChatBubble({ message, previousUserQuestion }) {
+  const [copyStatus, setCopyStatus] = useState("idle");
+
   const isUser = message.role === "user";
+
+  async function handleCopyAnswer() {
+    try {
+      await copyTextToClipboard(message.content || "");
+      setCopyStatus("copied");
+
+      window.setTimeout(() => {
+        setCopyStatus("idle");
+      }, 1800);
+    } catch (error) {
+      setCopyStatus("failed");
+
+      window.setTimeout(() => {
+        setCopyStatus("idle");
+      }, 2200);
+    }
+  }
 
   return (
     <div
@@ -276,9 +368,28 @@ function ChatBubble({ message, previousUserQuestion }) {
           : "max-w-[92%] bg-[var(--app-surface-muted)] text-[var(--app-text)]"
       ].join(" ")}
     >
-      <p className="mb-2 text-sm font-semibold text-[var(--brand-blue)]">
-        {isUser ? "You" : "M&E Assistant"}
-      </p>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-[var(--brand-blue)]">
+          {isUser ? "You" : "M&E Assistant"}
+        </p>
+
+        {!isUser && (
+          <button
+            type="button"
+            onClick={handleCopyAnswer}
+            className="inline-flex items-center gap-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--app-muted)] transition hover:border-[var(--brand-sky-border)] hover:bg-[var(--brand-sky-soft)] hover:text-[var(--brand-blue)]"
+            aria-label="Copy assistant response"
+            title="Copy assistant response"
+          >
+            {copyStatus === "copied" ? <Check size={14} /> : <Copy size={14} />}
+            {copyStatus === "copied"
+              ? "Copied"
+              : copyStatus === "failed"
+                ? "Copy failed"
+                : "Copy"}
+          </button>
+        )}
+      </div>
 
       <div className="whitespace-pre-wrap text-sm leading-7">
         {message.content}
@@ -304,6 +415,35 @@ function ChatBubble({ message, previousUserQuestion }) {
       )}
     </div>
   );
+}
+
+async function copyTextToClipboard(text) {
+  if (!text.trim()) {
+    throw new Error("There is no answer text to copy.");
+  }
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.setAttribute("readonly", "");
+  textArea.style.position = "fixed";
+  textArea.style.top = "-9999px";
+  textArea.style.left = "-9999px";
+
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textArea);
+
+  if (!copied) {
+    throw new Error("Copy command failed.");
+  }
 }
 
 function Sources({ citations, messageId, sessionId }) {

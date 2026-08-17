@@ -7,7 +7,10 @@ import {
 } from "../services/auth.service.js";
 
 export const register = asyncHandler(async (req, res) => {
-  const result = await registerUser(req.body);
+  const result = await registerUser({
+    ...req.body,
+    ipAddress: req.ip
+  });
 
   res.status(201).json({
     status: "success",

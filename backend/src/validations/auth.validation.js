@@ -18,7 +18,11 @@ export const registerSchema = z.object({
   // Honeypot field:
   // Real users should never fill this.
   // Bots often fill every field they see.
-  companyWebsite: z.string().optional().default("")
+  companyWebsite: z.string().optional().default(""),
+
+  // Cloudflare Turnstile token:
+  // The backend service requires this only when TURNSTILE_ENABLED=true.
+  turnstileToken: z.string().optional().default("")
 });
 
 export const loginSchema = z.object({

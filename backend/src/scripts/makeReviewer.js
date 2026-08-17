@@ -24,8 +24,8 @@ async function makeReviewer() {
       role: USER_ROLES.REVIEWER
     },
     {
-      new: true,
-      runValidators: true
+    returnDocument: "after",
+    runValidators: true
     }
   );
 

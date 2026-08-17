@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import AuthLayout from "../../components/layout/AuthLayout";
@@ -16,6 +17,8 @@ export default function Login() {
     email: "",
     password: ""
   });
+
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     dispatch(clearAuthError());
@@ -45,6 +48,10 @@ export default function Login() {
     dispatch(loginThunk(form));
   }
 
+  function togglePasswordVisibility() {
+    setShowPassword((current) => !current);
+  }
+
   const isLoading = status === "loading";
 
   return (
@@ -72,15 +79,28 @@ export default function Login() {
           <label className="mb-2 block text-sm font-medium text-slate-700">
             Password
           </label>
-          <input
-            name="password"
-            value={form.password}
-            onChange={handleChange}
-            required
-            type="password"
-            className="w-full rounded-2xl border border-[var(--brand-border-soft)] px-4 py-3 outline-none transition focus:border-[var(--brand-sky)] focus:ring-4 focus:ring-[var(--brand-sky)]/20"
-            placeholder="Enter your password"
-          />
+
+          <div className="relative">
+            <input
+              name="password"
+              value={form.password}
+              onChange={handleChange}
+              required
+              type={showPassword ? "text" : "password"}
+              className="w-full rounded-2xl border border-[var(--brand-border-soft)] px-4 py-3 pr-12 outline-none transition focus:border-[var(--brand-sky)] focus:ring-4 focus:ring-[var(--brand-sky)]/20"
+              placeholder="Enter your password"
+            />
+
+            <button
+              type="button"
+              onClick={togglePasswordVisibility}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-[var(--brand-blue)]"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              title={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
         </div>
 
         {error && (
