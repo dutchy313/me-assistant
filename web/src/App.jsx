@@ -11,6 +11,7 @@ import Dashboard from "./pages/dashboard/Dashboard";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import RoleRoute from "./components/auth/RoleRoute";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
+import GoogleAnalyticsTracker from "./components/analytics/GoogleAnalyticsTracker";
 
 import ChatWorkspace from "./pages/app/ChatWorkspace";
 import FeedbackCenter from "./pages/app/FeedbackCenter";
@@ -42,6 +43,8 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <GoogleAnalyticsTracker />
+
       <Routes>
         <Route path="/" element={<Landing />} />
 
