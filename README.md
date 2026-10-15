@@ -1,8 +1,12 @@
 # M&E Assistant
 
-M&E Assistant is a source-backed Monitoring and Evaluation assistant built for evidence teams. Users can ask M&E questions and receive answers grounded in a private document library with citations.
+M&E Assistant is a source-backed Monitoring and Evaluation learning and practice assistant built for M&E lecturers, students, trainees, and practitioners. It helps users ask Monitoring and Evaluation questions and receive answers grounded in a private, curated document library, with citations that allow users to trace responses back to their sources.
 
 Designed by the Evidence and Intelligence team at Cloneshouse.
+
+The current indexed source catalogue is available here:
+
+**[View the M&E Assistant Indexed Source Library](./INDEXED_SOURCES.md)**
 
 ---
 
